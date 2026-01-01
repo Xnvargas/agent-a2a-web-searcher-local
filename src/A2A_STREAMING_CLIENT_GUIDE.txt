@@ -1,0 +1,257 @@
+================================================================================
+A2A (Agent2Agent) STREAMING CLIENT GUIDE
+================================================================================
+
+This guide explains how to communicate with the A2A server using streaming
+(Server-Sent Events).
+
+================================================================================
+SERVER CONFIGURATION
+================================================================================
+
+Server URL: http://127.0.0.1:8005
+JSON-RPC Endpoint: /jsonrpc/
+Full Streaming URL: http://127.0.0.1:8005/jsonrpc/
+
+================================================================================
+AVAILABLE METHODS
+================================================================================
+
+1. message/send     - Non-streaming, returns single response
+2. message/stream   - Streaming, returns Server-Sent Events (SSE)
+
+================================================================================
+STREAMING REQUEST FORMAT
+================================================================================
+
+HTTP Method: POST
+URL: http://127.0.0.1:8005/jsonrpc/
+Headers:
+  - Content-Type: application/json
+  - Accept: text/event-stream
+
+Request Body (JSON-RPC 2.0):
+{
+  "jsonrpc": "2.0",
+  "method": "message/stream",
+  "params": {
+    "message": {
+      "role": "user",
+      "messageId": "<unique-uuid>",
+      "parts": [
+        {
+          "kind": "text",
+          "text": "Your message here"
+        }
+      ]
+    }
+  },
+  "id": "<request-uuid>"
+}
+
+================================================================================
+RESPONSE FORMAT (Server-Sent Events)
+================================================================================
+
+The server responds with SSE format. Each event is prefixed with "data: "
+
+Example Response Stream:
+------------------------
+
+data: {"id":"req-1","jsonrpc":"2.0","result":{"contextId":"...","taskId":"...","kind":"status-update","status":{"state":"working"},"final":false}}
+
+data: {"id":"req-1","jsonrpc":"2.0","result":{"contextId":"...","taskId":"...","kind":"status-update","status":{"state":"working","message":{...}},"final":false}}
+
+data: {"id":"req-1","jsonrpc":"2.0","result":{"contextId":"...","taskId":"...","kind":"status-update","status":{"state":"completed"},"final":true}}
+
+================================================================================
+JAVASCRIPT/TYPESCRIPT CLIENT EXAMPLE
+================================================================================
+
+// Using fetch with ReadableStream for SSE
+async function streamMessage(userMessage: string) {
+  const requestId = crypto.randomUUID();
+  const messageId = crypto.randomUUID();
+  
+  const response = await fetch('http://127.0.0.1:8005/jsonrpc/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'text/event-stream',
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'message/stream',
+      params: {
+        message: {
+          role: 'user',
+          messageId: messageId,
+          parts: [{ kind: 'text', text: userMessage }]
+        }
+      },
+      id: requestId
+    })
+  });
+
+  const reader = response.body?.getReader();
+  const decoder = new TextDecoder();
+  
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    
+    const chunk = decoder.decode(value);
+    const lines = chunk.split('\n');
+    
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        const jsonData = JSON.parse(line.slice(6));
+        console.log('Received:', jsonData);
+        
+        // Handle different status updates
+        if (jsonData.result?.status?.message) {
+          const agentMessage = jsonData.result.status.message;
+          console.log('Agent says:', agentMessage.parts);
+        }
+        
+        // Check if stream is complete
+        if (jsonData.result?.final === true) {
+          console.log('Stream completed');
+        }
+      }
+    }
+  }
+}
+
+// Usage
+streamMessage('Hello, agent!');
+
+================================================================================
+PYTHON CLIENT EXAMPLE
+================================================================================
+
+import httpx
+import json
+import uuid
+
+async def stream_message(user_message: str):
+    request_id = str(uuid.uuid4())
+    message_id = str(uuid.uuid4())
+    
+    payload = {
+        "jsonrpc": "2.0",
+        "method": "message/stream",
+        "params": {
+            "message": {
+                "role": "user",
+                "messageId": message_id,
+                "parts": [{"kind": "text", "text": user_message}]
+            }
+        },
+        "id": request_id
+    }
+    
+    async with httpx.AsyncClient() as client:
+        async with client.stream(
+            'POST',
+            'http://127.0.0.1:8005/jsonrpc/',
+            json=payload,
+            headers={
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream'
+            }
+        ) as response:
+            async for line in response.aiter_lines():
+                if line.startswith('data: '):
+                    data = json.loads(line[6:])
+                    print(f"Received: {data}")
+                    
+                    if data.get('result', {}).get('final'):
+                        print("Stream completed")
+                        break
+
+# Usage
+import asyncio
+asyncio.run(stream_message("Hello, agent!"))
+
+================================================================================
+CURL EXAMPLE
+================================================================================
+
+curl -X POST http://127.0.0.1:8005/jsonrpc/ \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "message/stream",
+    "params": {
+      "message": {
+        "role": "user",
+        "messageId": "test-msg-001",
+        "parts": [{"kind": "text", "text": "Hello, agent!"}]
+      }
+    },
+    "id": "request-001"
+  }'
+
+================================================================================
+USING THE OFFICIAL A2A SDK (RECOMMENDED)
+================================================================================
+
+The A2A Python SDK provides built-in streaming support:
+
+from a2a.client import A2AClient
+import httpx
+
+async def main():
+    async with httpx.AsyncClient() as http_client:
+        client = A2AClient(
+            httpx_client=http_client,
+            url='http://127.0.0.1:8005/jsonrpc/'
+        )
+        
+        # Use send_message_streaming for SSE
+        async for event in client.send_message_streaming(
+            message={
+                "role": "user",
+                "messageId": "msg-001",
+                "parts": [{"kind": "text", "text": "Hello!"}]
+            }
+        ):
+            print(event)
+
+import asyncio
+asyncio.run(main())
+
+================================================================================
+RESPONSE STATUS STATES
+================================================================================
+
+The server sends status updates with the following states:
+
+- "working"   : Agent is processing the request
+- "completed" : Agent has finished processing
+- "failed"    : An error occurred
+- "canceled"  : The task was canceled
+
+================================================================================
+IMPORTANT NOTES
+================================================================================
+
+1. Always include a unique "messageId" in your message params
+2. The "id" field in the JSON-RPC request should be unique per request
+3. The response includes "contextId" and "taskId" for tracking conversations
+4. Check "final": true to know when the stream is complete
+5. Handle reconnection for long-running streams (use task/resubscribe method)
+
+================================================================================
+AGENT CAPABILITIES
+================================================================================
+
+This server declares the following capabilities:
+- streaming: true (Server-Sent Events supported)
+
+You can verify capabilities by fetching the agent card:
+GET http://127.0.0.1:8005/
+
+================================================================================

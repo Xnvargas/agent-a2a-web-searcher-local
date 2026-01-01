@@ -13,6 +13,8 @@ dependencies = [
     "langgraph>=0.6.10",
     "pyyaml>=6.0.2",
     "httpx>=0.27.0",
+    # BeeAI Framework for bee_agent.py
+    "beeai-framework[a2a]>=0.1.0",
 ]
 
 [tool.ruff]
@@ -21,6 +23,7 @@ target-version = "py311"
 
 [project.scripts]
 server = "agentstack_agents.agent:run"
+bee-server = "agentstack_agents.bee_agent:run"
 
 [build-system]
 requires = ["hatchling"]

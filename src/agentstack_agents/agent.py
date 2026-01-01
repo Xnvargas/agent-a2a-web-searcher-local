@@ -1,6 +1,6 @@
 """
 =============================================================================
-BEEAI AGENT - LangGraph Agent with Modular Tool Architecture
+AGENTSTACK AGENT - LangGraph Agent with Modular Tool Architecture
 =============================================================================
 
 This is the main agent handler that processes user messages using LangGraph
@@ -43,7 +43,7 @@ import os
 import json
 from collections.abc import AsyncGenerator
 from typing import Annotated
-from a2a.types import Message
+from a2a.types import Message, AgentCapabilities
 from a2a.utils.message import get_message_text
 from agentstack_sdk.server import Server
 from agentstack_sdk.server.context import RunContext
@@ -93,6 +93,7 @@ server = Server()
 # =============================================================================
 
 @server.agent(
+    capabilities=AgentCapabilities(streaming=True),
     detail=AgentDetail(
         ui_type="chat",
         user_greeting="Welcome! I'm a Granite 4 agent with web scraping and research capabilities powered by modular tools and LangGraph.",

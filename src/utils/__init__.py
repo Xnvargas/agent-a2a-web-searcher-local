@@ -39,12 +39,22 @@ agent = create_langgraph_agent(..., tools=custom_tools)
 """
 
 # -----------------------------------------------------------------------------
-# Main factory function
+# Main factory function - LangGraph
 # -----------------------------------------------------------------------------
 from .langgraph_factory import create_langgraph_agent
 
 # -----------------------------------------------------------------------------
-# Citation utilities (optional)
+# BeeAI Framework factory function
+# -----------------------------------------------------------------------------
+from .bee_factory import (
+    create_beeai_agent,
+    create_beeai_llm,
+    wrap_tools_for_beeai,
+    run_beeai_agent,
+)
+
+# -----------------------------------------------------------------------------
+# Citation utilities (LangGraph)
 # -----------------------------------------------------------------------------
 from .citations import (
     format_citation,
@@ -54,15 +64,39 @@ from .citations import (
 )
 
 # -----------------------------------------------------------------------------
+# BeeAI Citation utilities
+# -----------------------------------------------------------------------------
+from .bee_citations import (
+    format_bee_citation,
+    format_bee_citations_for_beeai,
+    format_bee_tool_data_for_logging,
+    print_bee_tool_execution,
+    extract_bee_citations_from_response,
+)
+
+# -----------------------------------------------------------------------------
 # Public API
 # -----------------------------------------------------------------------------
 __all__ = [
-    # Factory
+    # LangGraph Factory
     "create_langgraph_agent",
     
-    # Citations
+    # BeeAI Factory
+    "create_beeai_agent",
+    "create_beeai_llm",
+    "wrap_tools_for_beeai",
+    "run_beeai_agent",
+    
+    # LangGraph Citations
     "format_citation",
     "format_citations_for_beeai",
     "format_tool_data_for_logging",
     "print_tool_execution",
+    
+    # BeeAI Citations
+    "format_bee_citation",
+    "format_bee_citations_for_beeai",
+    "format_bee_tool_data_for_logging",
+    "print_bee_tool_execution",
+    "extract_bee_citations_from_response",
 ]
