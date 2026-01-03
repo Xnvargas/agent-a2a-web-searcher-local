@@ -31,7 +31,7 @@ To run the BeeAI agent:
 """
 
 # LangGraph Agent
-from .agent import run, granite_4_starter
+from .agent import run, a2a_starter 
 
 # BeeAI Framework Agent
 from .bee_agent import (

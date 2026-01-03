@@ -103,10 +103,10 @@ server = Server()
     capabilities=AgentCapabilities(streaming=True),
     detail=AgentDetail(
         ui_type="chat",
-        user_greeting="Welcome! I'm a Granite 4 agent with web scraping and research capabilities powered by modular tools and LangGraph.",
+        user_greeting="Welcome! I'm an AI agent with web scraping and research capabilities powered by modular tools and LangGraph.",
         license="Apache 2.0",
         programming_language="Python",
-        framework="BeeAI + LangGraph + Modular Tools",
+        framework="Langgraph",
         
         # ---------------------------------------------------------------------
         # TOOL LIST - Add entries here for new tools you want to advertise
@@ -174,7 +174,7 @@ server = Server()
         ]
     )
 )
-async def granite_4_starter(
+async def a2a_starter(
     input: Message,
     context: RunContext,
     llm: Annotated[
@@ -473,7 +473,7 @@ async def granite_4_starter(
 
 def run():
     """
-    Start the BeeAI agent server.
+    Start the Agentstack A2A agent server.
     
     Configuration via environment variables:
     - HOST: Server host (default: 127.0.0.1)
