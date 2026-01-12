@@ -72,15 +72,25 @@ from agentstack_sdk.a2a.extensions.ui.settings import (
 # -----------------------------------------------------------------------------
 from utils import create_langgraph_agent
 from utils.citations import format_citations_for_beeai, format_tool_data_for_logging
+from utils.content_parts import (
+    ContentType,
+    format_thinking_trajectory,
+    format_tool_call_trajectory,
+    format_tool_result_trajectory,
+    create_thinking_metadata,
+    create_response_metadata,
+    create_tool_call_metadata,
+    create_tool_result_metadata,
+)
 from tools import get_all_tools, get_tool_by_name, ToolRegistry
 from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk
 
 # -----------------------------------------------------------------------------
 # Standalone Mode LLM Configuration (fallback when BeeAI extension unavailable)
 # -----------------------------------------------------------------------------
-STANDALONE_LLM_API_BASE = os.getenv("LLM_API_BASE", "http://192.168.0.58:8080/v1")
+STANDALONE_LLM_API_BASE = os.getenv("LLM_API_BASE", "http://192.168.0.58:11434/v1")
 STANDALONE_LLM_API_KEY = os.getenv("LLM_API_KEY", "dummy")
-STANDALONE_LLM_MODEL = os.getenv("LLM_MODEL", "gpt-oss-120b")
+STANDALONE_LLM_MODEL = os.getenv("LLM_MODEL", "qwen3-next:80b-a3b-thinking-q4_K_M")
 
 
 # =============================================================================
@@ -360,13 +370,24 @@ async def a2a_starter(
     tool_citations = []
     tool_executions = []
     accumulated_response = ""  # Accumulate streamed tokens
+    accumulated_thinking = ""  # Accumulate thinking content (before tool calls)
     tool_calls_count = 0
+    thinking_step = 0  # Counter for thinking steps
     
     config = {"recursion_limit": 100}
 
     # -------------------------------------------------------------------------
-    # TOKEN-LEVEL STREAMING
-    # stream_mode="messages" emits AIMessageChunk objects with individual tokens
+    # TOKEN-LEVEL STREAMING WITH CONTENT CATEGORIZATION
+    # 
+    # Content is categorized based on position relative to tool calls:
+    # - Before any tool calls = "thinking" content (reasoning)
+    # - After tool executions = "response" content (final answer)
+    # 
+    # This enables Carbon frontend to render:
+    # - thinking → reasoning.steps / reasoning.content
+    # - tool_call → chain_of_thought invocation card
+    # - tool_result → chain_of_thought result expansion
+    # - response → main response text
     # -------------------------------------------------------------------------
     async for chunk, metadata in agent.astream(
         {
@@ -383,33 +404,76 @@ async def a2a_starter(
         if isinstance(chunk, AIMessageChunk):
             # Stream text content token-by-token to frontend
             if chunk.content:
-                yield chunk.content  # REAL-TIME TOKEN TO FRONTEND!
-                accumulated_response += chunk.content
+                # Categorize content based on position relative to tool calls
+                if tool_calls_count == 0:
+                    # THINKING: Before any tool calls = reasoning content
+                    accumulated_thinking += chunk.content
+                    
+                    # Emit thinking trajectory with metadata for frontend
+                    if is_thinking_enabled:
+                        # Stream to frontend with thinking context
+                        yield chunk.content  # Real-time token
+                        
+                        # Periodically emit thinking metadata (every ~100 chars)
+                        if len(accumulated_thinking) % 100 < 10:
+                            thinking_step += 1
+                            title, content = format_thinking_trajectory(
+                                accumulated_thinking[-200:],  # Last 200 chars
+                                step_number=thinking_step
+                            )
+                            yield trajectory.trajectory_metadata(
+                                title=title,
+                                content=content
+                            )
+                else:
+                    # RESPONSE: After tool calls = final response content
+                    yield chunk.content  # Real-time token to frontend
+                    accumulated_response += chunk.content
             
             # Track tool calls (come as chunks during streaming)
             if chunk.tool_calls:
                 tool_calls_count += len(chunk.tool_calls)
+                
                 for tc in chunk.tool_calls:
+                    tool_name_tc = tc.get('name', 'unknown')
+                    tool_args_tc = tc.get('args', {})
+                    tool_call_id = tc.get('id')
+                    
+                    # Emit structured tool call trajectory with content type metadata
+                    title, content = format_tool_call_trajectory(
+                        tool_name=tool_name_tc,
+                        args=tool_args_tc,
+                        tool_call_id=tool_call_id
+                    )
                     yield trajectory.trajectory_metadata(
-                        title=f"Tool Call: {tc.get('name', 'unknown')}",
-                        content=f"Args: {json.dumps(tc.get('args', {}), indent=2)}"
+                        title=title,
+                        content=content
                     )
                     
-                    tool_instance = get_tool_by_name(tc.get('name'))
+                    tool_instance = get_tool_by_name(tool_name_tc)
                     if tool_instance:
                         tool_executions.append({
-                            "tool_name": tc['name'],
-                            "tool_args": tc.get('args', {}),
+                            "tool_name": tool_name_tc,
+                            "tool_args": tool_args_tc,
+                            "tool_call_id": tool_call_id,
                             "tool_instance": tool_instance
                         })
         
         # Handle tool execution results (ToolMessage)
         elif hasattr(chunk, 'tool_call_id') and hasattr(chunk, 'content'):
             tool_name = getattr(chunk, 'name', 'unknown')
+            tool_call_id = getattr(chunk, 'tool_call_id', None)
             
+            # Emit structured tool result trajectory with content type metadata
+            title, content = format_tool_result_trajectory(
+                tool_name=tool_name,
+                result=chunk.content,
+                tool_call_id=tool_call_id,
+                status="success"
+            )
             yield trajectory.trajectory_metadata(
-                title=f"Tool Result: {tool_name}",
-                content=f"Result: {str(chunk.content)[:300]}..."
+                title=title,
+                content=content
             )
             
             # Generate citation for this tool result

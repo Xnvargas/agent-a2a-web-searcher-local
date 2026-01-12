@@ -42,6 +42,20 @@ agent = create_langgraph_agent(..., tools=custom_tools)
 # Main factory function - LangGraph
 # -----------------------------------------------------------------------------
 from .langgraph_factory import create_langgraph_agent
+from .content_parts import (
+    ContentType,
+    TypedContent,
+    ToolCallInfo,
+    ToolResultInfo,
+    create_thinking_metadata,
+    create_response_metadata,
+    create_tool_call_metadata,
+    create_tool_result_metadata,
+    create_status_metadata,
+    format_thinking_trajectory,
+    format_tool_call_trajectory,
+    format_tool_result_trajectory,
+)
 
 # -----------------------------------------------------------------------------
 # BeeAI Framework factory function

@@ -136,7 +136,7 @@ def create_langgraph_agent(
     tools: List["BaseTool"] = None,
     system_prompt: str = None,
     temperature: float = 0,
-    recursion_limit: int = 100
+    recursion_limit: int = 20
 ) -> StateGraph:
     """
     Create a LangGraph agent configured with the provided tools.
