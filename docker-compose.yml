@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agentstack-agent:latest
+    container_name: agentstack-agent
+    ports:
+      - "8005:8005"
+    environment:
+      # Server configuration
+      - HOST=0.0.0.0
+      - PORT=8005
+      # LLM configuration (standalone mode)
+      - LLM_API_BASE=http://192.168.0.58:11434/v1
+      - LLM_API_KEY=dummy
+      - LLM_MODEL=qwen3-next:80b-a3b-thinking-q4_K_M
+    restart: unless-stopped
+    # Optional: health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# Optional: Add network configuration if needed
+# networks:
+#   default:
+#     name: agentstack-network

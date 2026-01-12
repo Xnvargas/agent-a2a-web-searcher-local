@@ -209,7 +209,8 @@ def create_langgraph_agent(
         model=api_model,
         api_key=api_key,
         base_url=api_base,
-        temperature=temperature
+        temperature=temperature,
+        streaming=True,  # Enable token-level streaming
     )
     
     # -------------------------------------------------------------------------

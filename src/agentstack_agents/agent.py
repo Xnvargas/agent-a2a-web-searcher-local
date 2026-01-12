@@ -73,7 +73,7 @@ from agentstack_sdk.a2a.extensions.ui.settings import (
 from utils import create_langgraph_agent
 from utils.citations import format_citations_for_beeai, format_tool_data_for_logging
 from tools import get_all_tools, get_tool_by_name, ToolRegistry
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk
 
 # -----------------------------------------------------------------------------
 # Standalone Mode LLM Configuration (fallback when BeeAI extension unavailable)
@@ -359,84 +359,80 @@ async def a2a_starter(
     # Track tool executions and citations
     tool_citations = []
     tool_executions = []
-    final_response = ""
-    node_count = 0
+    accumulated_response = ""  # Accumulate streamed tokens
     tool_calls_count = 0
     
     config = {"recursion_limit": 100}
 
-    async for chunk in agent.astream({
-        "messages": messages, 
-        "llm_calls": 0,
-        "tool_instances": {t.name: t for t in tools}
-    }, config=config):
-        node_count += 1
+    # -------------------------------------------------------------------------
+    # TOKEN-LEVEL STREAMING
+    # stream_mode="messages" emits AIMessageChunk objects with individual tokens
+    # -------------------------------------------------------------------------
+    async for chunk, metadata in agent.astream(
+        {
+            "messages": messages, 
+            "llm_calls": 0,
+            "tool_instances": {t.name: t for t in tools}
+        }, 
+        config=config,
+        stream_mode="messages",  # KEY: enables token-level streaming
+    ):
+        node_name = metadata.get("langgraph_node", "unknown")
         
-        # Process each node's output
-        for node_name, node_output in chunk.items():
+        # Handle streaming LLM tokens (AIMessageChunk)
+        if isinstance(chunk, AIMessageChunk):
+            # Stream text content token-by-token to frontend
+            if chunk.content:
+                yield chunk.content  # REAL-TIME TOKEN TO FRONTEND!
+                accumulated_response += chunk.content
+            
+            # Track tool calls (come as chunks during streaming)
+            if chunk.tool_calls:
+                tool_calls_count += len(chunk.tool_calls)
+                for tc in chunk.tool_calls:
+                    yield trajectory.trajectory_metadata(
+                        title=f"Tool Call: {tc.get('name', 'unknown')}",
+                        content=f"Args: {json.dumps(tc.get('args', {}), indent=2)}"
+                    )
+                    
+                    tool_instance = get_tool_by_name(tc.get('name'))
+                    if tool_instance:
+                        tool_executions.append({
+                            "tool_name": tc['name'],
+                            "tool_args": tc.get('args', {}),
+                            "tool_instance": tool_instance
+                        })
+        
+        # Handle tool execution results (ToolMessage)
+        elif hasattr(chunk, 'tool_call_id') and hasattr(chunk, 'content'):
+            tool_name = getattr(chunk, 'name', 'unknown')
+            
             yield trajectory.trajectory_metadata(
-                title=f"Node {node_count}: {node_name}",
-                content=f"State: {str(node_output)[:500]}..."
+                title=f"Tool Result: {tool_name}",
+                content=f"Result: {str(chunk.content)[:300]}..."
             )
             
-            # Parse message types from state
-            if isinstance(node_output, dict) and "messages" in node_output:
-                messages_list = node_output["messages"]
-                
-                for msg in messages_list:
-                    # Track tool calls from LLM
-                    if hasattr(msg, "tool_calls") and msg.tool_calls:
-                        tool_calls_count += len(msg.tool_calls)
-                        tool_calls_info = [
-                            f"- {tc['name']}({json.dumps(tc['args'], indent=2)})"
-                            for tc in msg.tool_calls
-                        ]
-                        
-                        yield trajectory.trajectory_metadata(
-                            title=f"Tool Calls from {node_name}",
-                            content="\n".join(tool_calls_info)
-                        )
-                        
-                        # Collect citation metadata for each tool call
-                        for tc in msg.tool_calls:
-                            tool_instance = get_tool_by_name(tc['name'])
-                            if tool_instance:
-                                # We'll get actual result later, for now store args
-                                tool_executions.append({
-                                    "tool_name": tc['name'],
-                                    "tool_args": tc['args'],
-                                    "tool_instance": tool_instance
-                                })
-                    
-                    # Track tool results
-                    elif hasattr(msg, "content") and hasattr(msg, "tool_call_id"):
-                        tool_name = getattr(msg, 'name', 'unknown')
-                        
-                        yield trajectory.trajectory_metadata(
-                            title=f"Tool Result: {tool_name}",
-                            content=f"Result: {msg.content[:500]}..."
-                        )
-                        
-                        # Generate citation for this tool result
-                        for exec_info in tool_executions:
-                            if exec_info.get("tool_name") == tool_name and "result" not in exec_info:
-                                exec_info["result"] = msg.content
-                                # Note: use different var name to avoid shadowing 'citation' parameter
-                                cite_metadata = exec_info["tool_instance"].get_citation_metadata(
-                                    exec_info["tool_args"],
-                                    msg.content
-                                )
-                                tool_citations.append(cite_metadata)
-                                break
-                    
-                    # Capture final AI response
-                    elif hasattr(msg, "content") and msg.content:
-                        content = msg.content
-                        if content and not hasattr(msg, "tool_call_id"):
-                            final_response = content
+            # Generate citation for this tool result
+            for exec_info in tool_executions:
+                if exec_info.get("tool_name") == tool_name and "result" not in exec_info:
+                    exec_info["result"] = chunk.content
+                    cite_metadata = exec_info["tool_instance"].get_citation_metadata(
+                        exec_info["tool_args"],
+                        chunk.content
+                    )
+                    tool_citations.append(cite_metadata)
+                    break
+        
+        # Skip user messages in stream
+        elif isinstance(chunk, HumanMessage):
+            continue
+    
+    # Use accumulated_response for final processing
+    final_response = accumulated_response
     
     # -------------------------------------------------------------------------
-    # Format and Return Response
+    # Post-Streaming: Handle Citations and Storage
+    # Response already streamed token-by-token, just handle storage and citations
     # -------------------------------------------------------------------------
     formatted_citations = []
     
@@ -446,24 +442,25 @@ async def a2a_starter(
             content=f"Generated {len(tool_citations)} citations from tool executions"
         )
         formatted_citations = format_citations_for_beeai(tool_citations, final_response)
-    
-    # Return final response with citations
-    if final_response:
-        if formatted_citations:
-            yield citation.message(text=final_response, citations=formatted_citations)
-        else:
-            yield AgentMessage(text=final_response)
         
-        # Store in context for future history
-        agent_message = AgentMessage(text=final_response)
-        await context.store(agent_message)
+        # Emit citation metadata (frontend can apply to already-streamed text)
+        yield trajectory.trajectory_metadata(
+            title="Citations Data",
+            content=json.dumps([
+                {"url": c.url, "title": c.title, "start": c.start_index, "end": c.end_index}
+                for c in formatted_citations
+            ])
+        )
+    
+    # Store complete response for conversation history
+    if final_response:
+        await context.store(AgentMessage(text=final_response))
     else:
-        error_msg = "No response generated from agent"
-        yield AgentMessage(text=error_msg)
+        yield "No response generated from agent"
     
     yield trajectory.trajectory_metadata(
         title="LangGraph Execution Complete",
-        content=f"Total nodes executed: {node_count}\nTotal tool calls: {tool_calls_count}\nCitations generated: {len(tool_citations)}\nFinal response: {final_response[:200]}..."
+        content=f"Total tool calls: {tool_calls_count}\nCitations generated: {len(tool_citations)}\nResponse length: {len(final_response)} chars"
     )
 
 
@@ -482,7 +479,7 @@ def run():
     try:
         server.run(
             host=os.getenv("HOST", "127.0.0.1"), 
-            port=int(os.getenv("PORT", 8005))
+            port=int(os.getenv("PORT", 8006))
         )
     except KeyboardInterrupt:
         pass
