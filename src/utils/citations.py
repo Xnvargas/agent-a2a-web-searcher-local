@@ -28,14 +28,237 @@ formatted = format_tool_data_for_logging(
     tool_args={"url": "https://example.com"},
     tool_result="Scraped content here..."
 )
+
+# Create URI-keyed citation metadata for A2A protocol
+from utils.citations import create_citation_metadata, Citation
+
+citations = [
+    Citation(url="https://example.com", title="Source 1", start_index=0, end_index=100)
+]
+metadata = create_citation_metadata(citations)
 ```
+
+A2A PROTOCOL COMPLIANCE:
+------------------------
+
+This module supports the A2A citation extension by providing:
+- URI-keyed metadata format for client parsing
+- Position-based citation anchoring in response text
+- Structured citation data for frontend rendering
 
 =============================================================================
 """
 
 from typing import Any, Dict, List, Optional
 from datetime import datetime
+from dataclasses import dataclass, field
 import json
+import re
+
+from .extension_uris import ExtensionURIs, create_extension_metadata
+
+
+# =============================================================================
+# CITATION DATA STRUCTURES
+# =============================================================================
+
+@dataclass
+class Citation:
+    """
+    Structured citation data for A2A protocol compliance.
+
+    This dataclass represents a single citation that can be anchored to
+    specific positions in the response text.
+
+    Attributes:
+        url: Source URL for the citation
+        title: Display title for the citation
+        description: Optional description or summary
+        start_index: Character position where citation begins in response
+        end_index: Character position where citation ends in response
+        tool_name: Name of the tool that generated this citation
+        timestamp: ISO format timestamp of when citation was created
+    """
+    url: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    start_index: Optional[int] = None
+    end_index: Optional[int] = None
+    tool_name: Optional[str] = None
+    timestamp: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary, excluding None values."""
+        return {
+            k: v for k, v in {
+                "url": self.url,
+                "title": self.title,
+                "description": self.description,
+                "start_index": self.start_index,
+                "end_index": self.end_index,
+            }.items() if v is not None
+        }
+
+
+# =============================================================================
+# A2A PROTOCOL CITATION METADATA HELPERS
+# =============================================================================
+
+def create_citation_metadata(citations: List[Citation]) -> Dict[str, Any]:
+    """
+    Create citation metadata in the A2A protocol format.
+
+    Returns metadata keyed by the citation extension URI for client parsing.
+
+    Args:
+        citations: List of Citation objects to include in metadata
+
+    Returns:
+        Dictionary with citation extension URI as key and citation data as value
+
+    Example:
+        ```python
+        citations = [
+            Citation(url="https://example.com", title="Source 1", start_index=0, end_index=100)
+        ]
+        metadata = create_citation_metadata(citations)
+        # Returns:
+        # {
+        #     "https://a2a-extensions.../citation/v1": {
+        #         "citations": [{"url": "...", "title": "...", ...}]
+        #     }
+        # }
+        ```
+    """
+    return create_extension_metadata(
+        ExtensionURIs.CITATION,
+        {"citations": [c.to_dict() for c in citations]}
+    )
+
+
+def calculate_citation_positions(
+    tool_citations: List[Dict[str, Any]],
+    response_text: str,
+    search_patterns: Optional[List[str]] = None
+) -> List[Citation]:
+    """
+    Calculate character positions for citations within response text.
+
+    This function attempts to find relevant text spans in the response that
+    correspond to each citation source. If specific patterns aren't found,
+    citations cover the entire response.
+
+    Args:
+        tool_citations: List of citation data from tool executions
+        response_text: The final response text to anchor citations to
+        search_patterns: Optional list of patterns to search for each citation
+
+    Returns:
+        List of Citation objects with calculated positions
+
+    Example:
+        ```python
+        citations = calculate_citation_positions(
+            tool_citations=[
+                {"tool": "searx_search", "url": "https://example.com", "search_query": "python"}
+            ],
+            response_text="Python is a programming language...",
+            search_patterns=["Python", "programming"]
+        )
+        ```
+    """
+    formatted_citations = []
+    response_length = len(response_text)
+
+    for idx, cite in enumerate(tool_citations, 1):
+        # Extract URL from citation data
+        url = cite.get('url', cite.get('base_url', ''))
+        if isinstance(url, list) and url:
+            url = url[0]
+
+        # Build title
+        tool_name = cite.get('tool', 'unknown')
+        title = f"Source {idx}: {tool_name}"
+
+        # Build description
+        description_parts = []
+        if 'content_format' in cite:
+            description_parts.append(f"Format: {cite['content_format']}")
+        if 'search_query' in cite:
+            description_parts.append(f"Query: {cite['search_query']}")
+        if 'timestamp' in cite:
+            description_parts.append(f"Retrieved: {cite['timestamp']}")
+        description = " | ".join(description_parts) if description_parts else "Tool execution"
+
+        # Calculate positions - try to find relevant text span
+        start_index = 0
+        end_index = response_length
+
+        # If we have search patterns, try to find citation-specific positions
+        if search_patterns and idx <= len(search_patterns):
+            pattern = search_patterns[idx - 1]
+            match = re.search(re.escape(pattern), response_text, re.IGNORECASE)
+            if match:
+                # Expand to sentence boundaries for better context
+                start_index = max(0, response_text.rfind('.', 0, match.start()) + 1)
+                end_index = min(response_length, response_text.find('.', match.end()) + 1)
+                if end_index <= start_index:
+                    end_index = response_length
+
+        formatted_citations.append(Citation(
+            url=url or "",
+            title=title,
+            description=description,
+            start_index=start_index,
+            end_index=end_index,
+            tool_name=tool_name,
+            timestamp=cite.get('timestamp')
+        ))
+
+    return formatted_citations
+
+
+def find_text_spans_for_citation(
+    response_text: str,
+    keywords: List[str],
+    context_chars: int = 100
+) -> List[tuple[int, int]]:
+    """
+    Find text spans in response that match citation keywords.
+
+    Args:
+        response_text: The response text to search
+        keywords: Keywords to search for
+        context_chars: Number of characters to include around matches
+
+    Returns:
+        List of (start_index, end_index) tuples for matching spans
+    """
+    spans = []
+
+    for keyword in keywords:
+        for match in re.finditer(re.escape(keyword), response_text, re.IGNORECASE):
+            start = max(0, match.start() - context_chars)
+            end = min(len(response_text), match.end() + context_chars)
+            spans.append((start, end))
+
+    # Merge overlapping spans
+    if spans:
+        spans.sort()
+        merged = [spans[0]]
+        for start, end in spans[1:]:
+            if start <= merged[-1][1]:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+            else:
+                merged.append((start, end))
+        return merged
+
+    return [(0, len(response_text))]
+
+
+# =============================================================================
+# ORIGINAL CITATION HELPERS (Maintained for backward compatibility)
+# =============================================================================
 
 
 def format_citation(

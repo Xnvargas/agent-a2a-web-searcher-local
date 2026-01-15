@@ -265,13 +265,13 @@ def format_thinking_trajectory(
 ) -> tuple[str, str]:
     """
     Format thinking content for trajectory metadata.
-    
+
     Returns:
         Tuple of (title, content_json) for trajectory.trajectory_metadata()
     """
     title = f"Thinking Step {step_number}" if step_number else "Reasoning"
     metadata = create_thinking_metadata(content, step_number)
-    
+
     return title, json.dumps({
         "content": content,
         **metadata
@@ -285,13 +285,13 @@ def format_tool_call_trajectory(
 ) -> tuple[str, str]:
     """
     Format tool call for trajectory metadata.
-    
+
     Returns:
         Tuple of (title, content_json) for trajectory.trajectory_metadata()
     """
     title = f"Tool Call: {tool_name}"
     metadata = create_tool_call_metadata(tool_name, args, tool_call_id)
-    
+
     return title, json.dumps(metadata)
 
 
@@ -303,11 +303,186 @@ def format_tool_result_trajectory(
 ) -> tuple[str, str]:
     """
     Format tool result for trajectory metadata.
-    
+
     Returns:
         Tuple of (title, content_json) for trajectory.trajectory_metadata()
     """
     title = f"Tool Result: {tool_name}"
     metadata = create_tool_result_metadata(tool_name, result, tool_call_id, status)
-    
+
     return title, json.dumps(metadata)
+
+
+# =============================================================================
+# URI-KEYED TRAJECTORY METADATA (A2A Protocol Compliant)
+# =============================================================================
+
+from .extension_uris import ExtensionURIs, create_extension_metadata
+
+
+def create_trajectory_metadata(
+    title: str,
+    content: str,
+    group_id: Optional[str] = None,
+    content_type: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Create trajectory metadata in URI-keyed format for A2A protocol.
+
+    Returns metadata keyed by the trajectory extension URI for client parsing.
+
+    Args:
+        title: Display title for the trajectory step
+        content: Content to display (can be markdown)
+        group_id: Optional ID to group related trajectory steps
+        content_type: Optional content type for semantic categorization
+
+    Returns:
+        Dictionary with trajectory extension URI as key
+
+    Example:
+        ```python
+        metadata = create_trajectory_metadata(
+            title="Calling search tool",
+            content="```json\\n{\"query\": \"python\"}\\n```",
+            group_id="tool-search-123"
+        )
+        ```
+    """
+    trajectory_data = {
+        "title": title,
+        "content": content,
+    }
+
+    if group_id:
+        trajectory_data["group_id"] = group_id
+    if content_type:
+        trajectory_data["content_type"] = content_type
+
+    return create_extension_metadata(ExtensionURIs.TRAJECTORY, trajectory_data)
+
+
+def create_thinking_trajectory_metadata(
+    content: str,
+    step_number: Optional[int] = None,
+    group_id: str = "reasoning"
+) -> Dict[str, Any]:
+    """
+    Create URI-keyed trajectory metadata for thinking/reasoning content.
+
+    Args:
+        content: The thinking/reasoning content
+        step_number: Optional step number
+        group_id: Group ID for relating thinking steps (default: "reasoning")
+
+    Returns:
+        Dictionary with trajectory extension URI as key
+    """
+    title = f"Thinking Step {step_number}" if step_number else "Reasoning"
+
+    return create_trajectory_metadata(
+        title=title,
+        content=content,
+        group_id=group_id,
+        content_type=ContentType.THINKING
+    )
+
+
+def create_tool_call_trajectory_metadata(
+    tool_name: str,
+    args: Dict[str, Any],
+    tool_call_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Create URI-keyed trajectory metadata for tool calls.
+
+    Args:
+        tool_name: Name of the tool being called
+        args: Arguments passed to the tool
+        tool_call_id: Optional unique ID for the tool call
+
+    Returns:
+        Dictionary with trajectory extension URI as key
+
+    Example:
+        ```python
+        metadata = create_tool_call_trajectory_metadata(
+            tool_name="firecrawl_scrape",
+            args={"url": "https://example.com"},
+            tool_call_id="call_123"
+        )
+        ```
+    """
+    content = f"**Arguments:**\n```json\n{json.dumps(args, indent=2)}\n```"
+    group_id = f"tool-{tool_call_id or tool_name}"
+
+    return create_trajectory_metadata(
+        title=f"Calling {tool_name}",
+        content=content,
+        group_id=group_id,
+        content_type=ContentType.TOOL_CALL
+    )
+
+
+def create_tool_result_trajectory_metadata(
+    tool_name: str,
+    result: Any,
+    tool_call_id: Optional[str] = None,
+    status: str = "success",
+    truncate_at: int = 500
+) -> Dict[str, Any]:
+    """
+    Create URI-keyed trajectory metadata for tool results.
+
+    Args:
+        tool_name: Name of the tool that was executed
+        result: The result returned by the tool
+        tool_call_id: Optional unique ID matching the tool call
+        status: Execution status (success, error, etc.)
+        truncate_at: Max characters for result preview
+
+    Returns:
+        Dictionary with trajectory extension URI as key
+    """
+    result_str = str(result)
+    result_preview = result_str[:truncate_at] + "..." if len(result_str) > truncate_at else result_str
+
+    status_emoji = "" if status == "success" else ""
+    content = f"**Status:** {status_emoji} {status}\n\n**Result:**\n```\n{result_preview}\n```"
+    group_id = f"tool-{tool_call_id or tool_name}"
+
+    return create_trajectory_metadata(
+        title=f"{tool_name} Result",
+        content=content,
+        group_id=group_id,
+        content_type=ContentType.TOOL_RESULT
+    )
+
+
+def create_status_trajectory_metadata(
+    message: str,
+    state: str = "working"
+) -> Dict[str, Any]:
+    """
+    Create URI-keyed trajectory metadata for status updates.
+
+    Args:
+        message: Status message
+        state: Current state (working, completed, error, etc.)
+
+    Returns:
+        Dictionary with trajectory extension URI as key
+    """
+    state_emoji = {
+        "working": "",
+        "completed": "",
+        "error": "",
+        "waiting": "",
+        "pending": ""
+    }.get(state, "")
+
+    return create_trajectory_metadata(
+        title=f"{state_emoji} {message}",
+        content=f"State: {state}",
+        content_type=ContentType.STATUS
+    )
