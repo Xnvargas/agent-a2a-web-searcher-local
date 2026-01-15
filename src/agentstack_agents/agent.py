@@ -88,19 +88,10 @@ from utils.content_parts import (
     create_response_metadata,
     create_tool_call_metadata,
     create_tool_result_metadata,
-<<<<<<< HEAD
-    # A2A-compliant part creators for structured streaming
-    create_thinking_text_part,
-    create_response_text_part,
-    create_tool_call_data_part,
-    create_tool_result_data_part,
-    create_status_text_part,
-=======
     # URI-keyed trajectory metadata (A2A Protocol)
     create_trajectory_metadata,
     create_tool_call_trajectory_metadata,
     create_tool_result_trajectory_metadata,
->>>>>>> 3e54ab55a8d8063bf6696ccac9303a75a7551e4d
 )
 from utils.error_extension import (
     create_error_metadata,
@@ -144,7 +135,7 @@ server = Server()
         license="Apache 2.0",
         programming_language="Python",
         framework="Langgraph",
-        
+
         # ---------------------------------------------------------------------
         # TOOL LIST - Add entries here for new tools you want to advertise
         # These should match tools registered in the tools/ package
@@ -248,24 +239,24 @@ async def a2a_starter(
 ) -> AsyncGenerator[RunYield, Message]:
     """
     Main agent handler that processes user messages using LangGraph with modular tools.
-    
+
     This agent uses the new modular tool architecture where tools are:
     - Registered in the tools/ package (MCP or LangChain)
     - Automatically discovered and loaded
     - Executed via the appropriate handler based on tool type
-    
+
     Extension Points:
         1. Add tools: Create new tool files in tools/mcp/ or tools/langchain/
         2. Customize prompt: Modify the system_prompt in create_langgraph_agent()
         3. Filter tools: Pass specific tools list instead of get_all_tools()
     """
     print("AGENT STARTING!")
-    
+
     # -------------------------------------------------------------------------
     # Settings Validation (Graceful for standalone mode)
     # -------------------------------------------------------------------------
     is_thinking_enabled = True  # Default when settings unavailable
-    
+
     if settings:
         try:
             parsed_settings = settings.parse_settings_response()
@@ -275,30 +266,30 @@ async def a2a_starter(
                 if thinking_val:
                     is_thinking_enabled = thinking_val.value
         except Exception as e:
-            print(f"⚠️  Could not parse settings: {e}")
+            print(f"Could not parse settings: {e}")
     else:
-        print("⚠️  Settings extension not activated - using defaults (standalone mode)")
-    
+        print("Settings extension not activated - using defaults (standalone mode)")
+
     # Store current user message in BeeAI context for history tracking
     await context.store(input)
-    
+
     # -------------------------------------------------------------------------
     # Extract User Message
     # -------------------------------------------------------------------------
     current_message = get_message_text(input)
     yield trajectory.trajectory_metadata(
-        title="Capture & Store User Input", 
+        title="Capture & Store User Input",
         content=f"{current_message}"
     )
-    
+
     # -------------------------------------------------------------------------
     # Load Conversation History
     # -------------------------------------------------------------------------
     history = [
-        message async for message in context.load_history() 
+        message async for message in context.load_history()
         if isinstance(message, Message) and message.parts
     ]
-    
+
     # Convert BeeAI message history to LangChain message objects
     langchain_messages = []
     for message in history:
@@ -307,12 +298,12 @@ async def a2a_starter(
             langchain_messages.append(HumanMessage(content=msg_text))
         else:
             langchain_messages.append(AIMessage(content=msg_text))
-    
+
     yield trajectory.trajectory_metadata(
-        title="Loaded Conversation History", 
+        title="Loaded Conversation History",
         content=f"Total messages in history: {len(langchain_messages)}"
     )
-    
+
     # -------------------------------------------------------------------------
     # LLM Configuration (with standalone fallback)
     # -------------------------------------------------------------------------
@@ -328,12 +319,12 @@ async def a2a_starter(
         api_model = STANDALONE_LLM_MODEL
         api_key = STANDALONE_LLM_API_KEY
         api_base = STANDALONE_LLM_API_BASE
-        print(f"⚠️  LLM extension not available - using standalone config: {api_model} @ {api_base}")
+        print(f"LLM extension not available - using standalone config: {api_model} @ {api_base}")
         yield AgentMessage(text=f"LLM configured for standalone mode: {api_model}\n")
 
     # -------------------------------------------------------------------------
     # Get Tools from Registry
-    # 
+    #
     # EXTENSION POINT: Tool Selection
     # You can customize which tools the agent has access to:
     #
@@ -351,15 +342,15 @@ async def a2a_starter(
     #   tools = ToolRegistry.get_tools_by_type("mcp")  # Only MCP tools
     # -------------------------------------------------------------------------
     tools = get_all_tools()
-    
+
     yield trajectory.trajectory_metadata(
         title="Tools Loaded from Registry",
         content=f"Available tools ({len(tools)}):\n" + "\n".join([f"- {t.name} ({t.tool_type})" for t in tools])
     )
-    
+
     # -------------------------------------------------------------------------
     # Create LangGraph Agent
-    # 
+    #
     # EXTENSION POINT: Agent Configuration
     # You can customize the agent by passing additional parameters:
     # - system_prompt: Custom system prompt
@@ -374,7 +365,7 @@ async def a2a_starter(
         # system_prompt="You are a specialized research assistant.",
         # temperature=0.1,
     )
-    
+
     # -------------------------------------------------------------------------
     # Thinking Mode (using value set in Settings Validation above)
     # -------------------------------------------------------------------------
@@ -382,17 +373,17 @@ async def a2a_starter(
         yield "Thinking mode is enabled - I'll show my reasoning process.\n"
     else:
         yield "Thinking mode is disabled - I'll provide direct responses.\n"
-    
+
     # -------------------------------------------------------------------------
     # Execute Agent
     # -------------------------------------------------------------------------
     messages = langchain_messages + [HumanMessage(content=current_message)]
-    
+
     yield trajectory.trajectory_metadata(
         title="Starting LangGraph Agent with Modular Tools",
         content=f"Passing {len(messages)} messages to agent (including {len(langchain_messages)} history messages)\nTools: {len(tools)}"
     )
-    
+
     # Track tool executions and citations
     tool_citations = []
     tool_executions = []
@@ -400,139 +391,24 @@ async def a2a_starter(
     accumulated_thinking = ""  # Accumulate thinking content (before tool calls)
     tool_calls_count = 0
     thinking_step = 0  # Counter for thinking steps
-    
+
     config = {"recursion_limit": 100}
 
     # -------------------------------------------------------------------------
-<<<<<<< HEAD
-    # TOKEN-LEVEL STREAMING WITH A2A-COMPLIANT STRUCTURED PARTS
-    # 
-    # Content is categorized based on position relative to tool calls:
-    # - Before any tool calls = "thinking" content (reasoning)
-    # - After tool executions = "response" content (final answer)
-    # 
-    # A2A Protocol Compliance:
-    # - TextPart with metadata.content_type for thinking/response
-    # - DataPart with data.type for tool_call/tool_result
-    # 
-=======
     # TOKEN-LEVEL STREAMING WITH CONTENT CATEGORIZATION & ERROR HANDLING
     #
     # Content is categorized based on position relative to tool calls:
     # - Before any tool calls = "thinking" content (reasoning)
     # - After tool executions = "response" content (final answer)
     #
->>>>>>> 3e54ab55a8d8063bf6696ccac9303a75a7551e4d
     # This enables Carbon frontend to render:
-    # - thinking → reasoning.steps / reasoning.content (accordion)
-    # - tool_call → chain_of_thought invocation card (spinner)
-    # - tool_result → chain_of_thought result expansion (checkmark)
-    # - response → main response text
+    # - thinking -> reasoning.steps / reasoning.content (accordion)
+    # - tool_call -> chain_of_thought invocation card (spinner)
+    # - tool_result -> chain_of_thought result expansion (checkmark)
+    # - response -> main response text
     #
     # Error handling emits structured error metadata via A2A error extension
     # -------------------------------------------------------------------------
-<<<<<<< HEAD
-    async for chunk, metadata in agent.astream(
-        {
-            "messages": messages, 
-            "llm_calls": 0,
-            "tool_instances": {t.name: t for t in tools}
-        }, 
-        config=config,
-        stream_mode="messages",  # KEY: enables token-level streaming
-    ):
-        node_name = metadata.get("langgraph_node", "unknown")
-        
-        # Handle streaming LLM tokens (AIMessageChunk)
-        if isinstance(chunk, AIMessageChunk):
-            # Stream text content token-by-token to frontend
-            if chunk.content:
-                # Categorize content based on position relative to tool calls
-                if tool_calls_count == 0:
-                    # THINKING: Before any tool calls = reasoning content
-                    accumulated_thinking += chunk.content
-                    
-                    # Emit thinking as A2A-compliant TextPart with metadata
-                    if is_thinking_enabled:
-                        # Stream structured AgentMessage with thinking metadata
-                        # Frontend parses: parts[0].metadata.content_type == 'thinking'
-                        yield AgentMessage(parts=[
-                            create_thinking_text_part(
-                                text=chunk.content,
-                                step_number=None  # Real-time streaming, no step yet
-                            )
-                        ])
-                        
-                        # Periodically emit thinking trajectory for sidebar/debug
-                        if len(accumulated_thinking) % 100 < 10:
-                            thinking_step += 1
-                            title, content = format_thinking_trajectory(
-                                accumulated_thinking[-200:],  # Last 200 chars
-                                step_number=thinking_step
-                            )
-                            yield trajectory.trajectory_metadata(
-                                title=title,
-                                content=content
-                            )
-                else:
-                    # RESPONSE: After tool calls = final response content
-                    # Stream structured AgentMessage with response metadata  
-                    # Frontend parses: parts[0].metadata.content_type == 'response'
-                    yield AgentMessage(parts=[
-                        create_response_text_part(text=chunk.content)
-                    ])
-                    accumulated_response += chunk.content
-            
-            # Track tool calls (come as chunks during streaming)
-            if chunk.tool_calls:
-                tool_calls_count += len(chunk.tool_calls)
-                
-                for tc in chunk.tool_calls:
-                    tool_name_tc = tc.get('name', 'unknown')
-                    tool_args_tc = tc.get('args', {})
-                    tool_call_id = tc.get('id')
-                    
-                    # Emit A2A DataPart for tool call
-                    # Frontend parses: parts[0].data.type == 'tool_call' → spinner card
-                    yield AgentMessage(parts=[
-                        create_tool_call_data_part(
-                            tool_name=tool_name_tc,
-                            args=tool_args_tc,
-                            tool_call_id=tool_call_id,
-                            status="in_progress"
-                        )
-                    ])
-                    
-                    # Also emit trajectory metadata for sidebar visibility
-                    title, content = format_tool_call_trajectory(
-                        tool_name=tool_name_tc,
-                        args=tool_args_tc,
-                        tool_call_id=tool_call_id
-                    )
-                    yield trajectory.trajectory_metadata(
-                        title=title,
-                        content=content
-                    )
-                    
-                    tool_instance = get_tool_by_name(tool_name_tc)
-                    if tool_instance:
-                        tool_executions.append({
-                            "tool_name": tool_name_tc,
-                            "tool_args": tool_args_tc,
-                            "tool_call_id": tool_call_id,
-                            "tool_instance": tool_instance
-                        })
-        
-        # Handle tool execution results (ToolMessage)
-        elif hasattr(chunk, 'tool_call_id') and hasattr(chunk, 'content'):
-            tool_name = getattr(chunk, 'name', 'unknown')
-            tool_call_id = getattr(chunk, 'tool_call_id', None)
-            
-            # Emit A2A DataPart for tool result
-            # Frontend parses: parts[0].data.type == 'tool_result' → checkmark card
-            yield AgentMessage(parts=[
-                create_tool_result_data_part(
-=======
     try:
         async for chunk, metadata in agent.astream(
             {
@@ -611,23 +487,11 @@ async def a2a_starter(
 
                 # Emit structured tool result trajectory with content type metadata
                 title, content = format_tool_result_trajectory(
->>>>>>> 3e54ab55a8d8063bf6696ccac9303a75a7551e4d
                     tool_name=tool_name,
                     result=chunk.content,
                     tool_call_id=tool_call_id,
                     status="success"
                 )
-<<<<<<< HEAD
-            ])
-            
-            # Also emit trajectory metadata for sidebar visibility
-            title, content = format_tool_result_trajectory(
-                tool_name=tool_name,
-                result=chunk.content,
-                tool_call_id=tool_call_id,
-                status="success"
-            )
-=======
                 yield trajectory.trajectory_metadata(
                     title=title,
                     content=content
@@ -657,7 +521,6 @@ async def a2a_starter(
         # ---------------------------------------------------------------------
 
         if tool_citations and final_response:
->>>>>>> 3e54ab55a8d8063bf6696ccac9303a75a7551e4d
             yield trajectory.trajectory_metadata(
                 title="Citations Summary",
                 content=f"Generated {len(tool_citations)} citations from tool executions"
@@ -713,16 +576,8 @@ async def a2a_starter(
 
         # Emit error trajectory for visibility
         yield trajectory.trajectory_metadata(
-<<<<<<< HEAD
-            title="Citations Data",
-            content=json.dumps([
-                {"url": c["url"], "title": c["title"], "start": c["start_index"], "end": c["end_index"]}
-                for c in formatted_citations
-            ])
-=======
             title="Execution Error",
             content=f"**Error:** {type(e).__name__}\n\n**Message:** {str(e)}\n\n**Context:**\n```json\n{json.dumps(error_context, indent=2)}\n```"
->>>>>>> 3e54ab55a8d8063bf6696ccac9303a75a7551e4d
         )
 
         # Yield error message with A2A extension metadata
@@ -743,14 +598,14 @@ async def a2a_starter(
 def run():
     """
     Start the Agentstack A2A agent server.
-    
+
     Configuration via environment variables:
     - HOST: Server host (default: 127.0.0.1)
     - PORT: Server port (default: 8005)
     """
     try:
         server.run(
-            host=os.getenv("HOST", "127.0.0.1"), 
+            host=os.getenv("HOST", "127.0.0.1"),
             port=int(os.getenv("PORT", 8006))
         )
     except KeyboardInterrupt:
