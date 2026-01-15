@@ -135,7 +135,7 @@ server = Server()
         license="Apache 2.0",
         programming_language="Python",
         framework="Langgraph",
-        
+
         # ---------------------------------------------------------------------
         # TOOL LIST - Add entries here for new tools you want to advertise
         # These should match tools registered in the tools/ package
@@ -239,24 +239,24 @@ async def a2a_starter(
 ) -> AsyncGenerator[RunYield, Message]:
     """
     Main agent handler that processes user messages using LangGraph with modular tools.
-    
+
     This agent uses the new modular tool architecture where tools are:
     - Registered in the tools/ package (MCP or LangChain)
     - Automatically discovered and loaded
     - Executed via the appropriate handler based on tool type
-    
+
     Extension Points:
         1. Add tools: Create new tool files in tools/mcp/ or tools/langchain/
         2. Customize prompt: Modify the system_prompt in create_langgraph_agent()
         3. Filter tools: Pass specific tools list instead of get_all_tools()
     """
     print("AGENT STARTING!")
-    
+
     # -------------------------------------------------------------------------
     # Settings Validation (Graceful for standalone mode)
     # -------------------------------------------------------------------------
     is_thinking_enabled = True  # Default when settings unavailable
-    
+
     if settings:
         try:
             parsed_settings = settings.parse_settings_response()
@@ -269,27 +269,27 @@ async def a2a_starter(
             print(f"⚠️  Could not parse settings: {e}")
     else:
         print("⚠️  Settings extension not activated - using defaults (standalone mode)")
-    
+
     # Store current user message in BeeAI context for history tracking
     await context.store(input)
-    
+
     # -------------------------------------------------------------------------
     # Extract User Message
     # -------------------------------------------------------------------------
     current_message = get_message_text(input)
     yield trajectory.trajectory_metadata(
-        title="Capture & Store User Input", 
+        title="Capture & Store User Input",
         content=f"{current_message}"
     )
-    
+
     # -------------------------------------------------------------------------
     # Load Conversation History
     # -------------------------------------------------------------------------
     history = [
-        message async for message in context.load_history() 
+        message async for message in context.load_history()
         if isinstance(message, Message) and message.parts
     ]
-    
+
     # Convert BeeAI message history to LangChain message objects
     langchain_messages = []
     for message in history:
@@ -298,12 +298,12 @@ async def a2a_starter(
             langchain_messages.append(HumanMessage(content=msg_text))
         else:
             langchain_messages.append(AIMessage(content=msg_text))
-    
+
     yield trajectory.trajectory_metadata(
-        title="Loaded Conversation History", 
+        title="Loaded Conversation History",
         content=f"Total messages in history: {len(langchain_messages)}"
     )
-    
+
     # -------------------------------------------------------------------------
     # LLM Configuration (with standalone fallback)
     # -------------------------------------------------------------------------
@@ -324,7 +324,7 @@ async def a2a_starter(
 
     # -------------------------------------------------------------------------
     # Get Tools from Registry
-    # 
+    #
     # EXTENSION POINT: Tool Selection
     # You can customize which tools the agent has access to:
     #
@@ -342,15 +342,15 @@ async def a2a_starter(
     #   tools = ToolRegistry.get_tools_by_type("mcp")  # Only MCP tools
     # -------------------------------------------------------------------------
     tools = get_all_tools()
-    
+
     yield trajectory.trajectory_metadata(
         title="Tools Loaded from Registry",
         content=f"Available tools ({len(tools)}):\n" + "\n".join([f"- {t.name} ({t.tool_type})" for t in tools])
     )
-    
+
     # -------------------------------------------------------------------------
     # Create LangGraph Agent
-    # 
+    #
     # EXTENSION POINT: Agent Configuration
     # You can customize the agent by passing additional parameters:
     # - system_prompt: Custom system prompt
@@ -365,7 +365,7 @@ async def a2a_starter(
         # system_prompt="You are a specialized research assistant.",
         # temperature=0.1,
     )
-    
+
     # -------------------------------------------------------------------------
     # Thinking Mode (using value set in Settings Validation above)
     # -------------------------------------------------------------------------
@@ -373,17 +373,17 @@ async def a2a_starter(
         yield "Thinking mode is enabled - I'll show my reasoning process.\n"
     else:
         yield "Thinking mode is disabled - I'll provide direct responses.\n"
-    
+
     # -------------------------------------------------------------------------
     # Execute Agent
     # -------------------------------------------------------------------------
     messages = langchain_messages + [HumanMessage(content=current_message)]
-    
+
     yield trajectory.trajectory_metadata(
         title="Starting LangGraph Agent with Modular Tools",
         content=f"Passing {len(messages)} messages to agent (including {len(langchain_messages)} history messages)\nTools: {len(tools)}"
     )
-    
+
     # Track tool executions and citations
     tool_citations = []
     tool_executions = []
@@ -391,7 +391,7 @@ async def a2a_starter(
     accumulated_thinking = ""  # Accumulate thinking content (before tool calls)
     tool_calls_count = 0
     thinking_step = 0  # Counter for thinking steps
-    
+
     config = {"recursion_limit": 100}
 
     # -------------------------------------------------------------------------
@@ -402,9 +402,9 @@ async def a2a_starter(
     # - After tool executions = "response" content (final answer)
     #
     # This enables Carbon frontend to render:
-    # - thinking → reasoning.steps / reasoning.content
-    # - tool_call → chain_of_thought invocation card
-    # - tool_result → chain_of_thought result expansion
+    # - thinking → reasoning.steps / reasoning.content (accordion)
+    # - tool_call → chain_of_thought invocation card (spinner)
+    # - tool_result → chain_of_thought result expansion (checkmark)
     # - response → main response text
     #
     # Error handling emits structured error metadata via A2A error extension
@@ -598,14 +598,14 @@ async def a2a_starter(
 def run():
     """
     Start the Agentstack A2A agent server.
-    
+
     Configuration via environment variables:
     - HOST: Server host (default: 127.0.0.1)
     - PORT: Server port (default: 8005)
     """
     try:
         server.run(
-            host=os.getenv("HOST", "127.0.0.1"), 
+            host=os.getenv("HOST", "127.0.0.1"),
             port=int(os.getenv("PORT", 8006))
         )
     except KeyboardInterrupt:
