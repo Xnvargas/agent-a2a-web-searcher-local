@@ -81,6 +81,12 @@ from utils.content_parts import (
     create_response_metadata,
     create_tool_call_metadata,
     create_tool_result_metadata,
+    # A2A-compliant part creators for structured streaming
+    create_thinking_text_part,
+    create_response_text_part,
+    create_tool_call_data_part,
+    create_tool_result_data_part,
+    create_status_text_part,
 )
 from tools import get_all_tools, get_tool_by_name, ToolRegistry
 from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk
@@ -377,16 +383,20 @@ async def a2a_starter(
     config = {"recursion_limit": 100}
 
     # -------------------------------------------------------------------------
-    # TOKEN-LEVEL STREAMING WITH CONTENT CATEGORIZATION
+    # TOKEN-LEVEL STREAMING WITH A2A-COMPLIANT STRUCTURED PARTS
     # 
     # Content is categorized based on position relative to tool calls:
     # - Before any tool calls = "thinking" content (reasoning)
     # - After tool executions = "response" content (final answer)
     # 
+    # A2A Protocol Compliance:
+    # - TextPart with metadata.content_type for thinking/response
+    # - DataPart with data.type for tool_call/tool_result
+    # 
     # This enables Carbon frontend to render:
-    # - thinking → reasoning.steps / reasoning.content
-    # - tool_call → chain_of_thought invocation card
-    # - tool_result → chain_of_thought result expansion
+    # - thinking → reasoning.steps / reasoning.content (accordion)
+    # - tool_call → chain_of_thought invocation card (spinner)
+    # - tool_result → chain_of_thought result expansion (checkmark)
     # - response → main response text
     # -------------------------------------------------------------------------
     async for chunk, metadata in agent.astream(
@@ -409,12 +419,18 @@ async def a2a_starter(
                     # THINKING: Before any tool calls = reasoning content
                     accumulated_thinking += chunk.content
                     
-                    # Emit thinking trajectory with metadata for frontend
+                    # Emit thinking as A2A-compliant TextPart with metadata
                     if is_thinking_enabled:
-                        # Stream to frontend with thinking context
-                        yield chunk.content  # Real-time token
+                        # Stream structured AgentMessage with thinking metadata
+                        # Frontend parses: parts[0].metadata.content_type == 'thinking'
+                        yield AgentMessage(parts=[
+                            create_thinking_text_part(
+                                text=chunk.content,
+                                step_number=None  # Real-time streaming, no step yet
+                            )
+                        ])
                         
-                        # Periodically emit thinking metadata (every ~100 chars)
+                        # Periodically emit thinking trajectory for sidebar/debug
                         if len(accumulated_thinking) % 100 < 10:
                             thinking_step += 1
                             title, content = format_thinking_trajectory(
@@ -427,7 +443,11 @@ async def a2a_starter(
                             )
                 else:
                     # RESPONSE: After tool calls = final response content
-                    yield chunk.content  # Real-time token to frontend
+                    # Stream structured AgentMessage with response metadata  
+                    # Frontend parses: parts[0].metadata.content_type == 'response'
+                    yield AgentMessage(parts=[
+                        create_response_text_part(text=chunk.content)
+                    ])
                     accumulated_response += chunk.content
             
             # Track tool calls (come as chunks during streaming)
@@ -439,7 +459,18 @@ async def a2a_starter(
                     tool_args_tc = tc.get('args', {})
                     tool_call_id = tc.get('id')
                     
-                    # Emit structured tool call trajectory with content type metadata
+                    # Emit A2A DataPart for tool call
+                    # Frontend parses: parts[0].data.type == 'tool_call' → spinner card
+                    yield AgentMessage(parts=[
+                        create_tool_call_data_part(
+                            tool_name=tool_name_tc,
+                            args=tool_args_tc,
+                            tool_call_id=tool_call_id,
+                            status="in_progress"
+                        )
+                    ])
+                    
+                    # Also emit trajectory metadata for sidebar visibility
                     title, content = format_tool_call_trajectory(
                         tool_name=tool_name_tc,
                         args=tool_args_tc,
@@ -464,7 +495,18 @@ async def a2a_starter(
             tool_name = getattr(chunk, 'name', 'unknown')
             tool_call_id = getattr(chunk, 'tool_call_id', None)
             
-            # Emit structured tool result trajectory with content type metadata
+            # Emit A2A DataPart for tool result
+            # Frontend parses: parts[0].data.type == 'tool_result' → checkmark card
+            yield AgentMessage(parts=[
+                create_tool_result_data_part(
+                    tool_name=tool_name,
+                    result=chunk.content,
+                    tool_call_id=tool_call_id,
+                    status="success"
+                )
+            ])
+            
+            # Also emit trajectory metadata for sidebar visibility
             title, content = format_tool_result_trajectory(
                 tool_name=tool_name,
                 result=chunk.content,
@@ -511,7 +553,7 @@ async def a2a_starter(
         yield trajectory.trajectory_metadata(
             title="Citations Data",
             content=json.dumps([
-                {"url": c.url, "title": c.title, "start": c.start_index, "end": c.end_index}
+                {"url": c["url"], "title": c["title"], "start": c["start_index"], "end": c["end_index"]}
                 for c in formatted_citations
             ])
         )

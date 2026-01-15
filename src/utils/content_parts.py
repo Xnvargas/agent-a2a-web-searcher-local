@@ -311,3 +311,159 @@ def format_tool_result_trajectory(
     metadata = create_tool_result_metadata(tool_name, result, tool_call_id, status)
     
     return title, json.dumps(metadata)
+
+
+# =============================================================================
+# A2A COMPLIANT PART CREATORS
+# =============================================================================
+# These functions create A2A protocol-compliant message parts that frontends
+# can parse to render different UI elements (reasoning accordion, tool cards, etc.)
+
+def create_thinking_text_part(
+    text: str,
+    step_number: Optional[int] = None
+) -> Dict[str, Any]:
+    """
+    Create an A2A TextPart with thinking/reasoning metadata.
+    
+    The frontend can use metadata.content_type == 'thinking' to render
+    this in a reasoning accordion or collapsible section.
+    
+    Args:
+        text: The thinking/reasoning text content
+        step_number: Optional step number for ordered display
+        
+    Returns:
+        A2A TextPart dict: {"kind": "text", "text": ..., "metadata": {...}}
+    """
+    metadata = {"content_type": ContentType.THINKING}
+    if step_number is not None:
+        metadata["step"] = step_number
+    
+    return {
+        "kind": "text",
+        "text": text,
+        "metadata": metadata
+    }
+
+
+def create_response_text_part(text: str) -> Dict[str, Any]:
+    """
+    Create an A2A TextPart for final response content.
+    
+    The frontend can use metadata.content_type == 'response' to render
+    this as the main response text.
+    
+    Args:
+        text: The response text content
+        
+    Returns:
+        A2A TextPart dict: {"kind": "text", "text": ..., "metadata": {...}}
+    """
+    return {
+        "kind": "text",
+        "text": text,
+        "metadata": {"content_type": ContentType.RESPONSE}
+    }
+
+
+def create_tool_call_data_part(
+    tool_name: str,
+    args: Dict[str, Any],
+    tool_call_id: Optional[str] = None,
+    status: str = "in_progress"
+) -> Dict[str, Any]:
+    """
+    Create an A2A DataPart for tool call events.
+    
+    The frontend parses data.type == 'tool_call' to render a chain-of-thought
+    invocation card with spinner while the tool executes.
+    
+    Args:
+        tool_name: Name of the tool being called
+        args: Arguments passed to the tool
+        tool_call_id: Unique ID for the tool call (for matching results)
+        status: Current status (in_progress, pending, etc.)
+        
+    Returns:
+        A2A DataPart dict: {"kind": "data", "data": {"type": "tool_call", ...}}
+    """
+    data = {
+        "type": "tool_call",
+        "tool_name": tool_name,
+        "args": args,
+        "status": status
+    }
+    if tool_call_id:
+        data["tool_call_id"] = tool_call_id
+    
+    return {
+        "kind": "data",
+        "data": data
+    }
+
+
+def create_tool_result_data_part(
+    tool_name: str,
+    result: Any,
+    tool_call_id: Optional[str] = None,
+    status: str = "success",
+    truncate_at: int = 1000
+) -> Dict[str, Any]:
+    """
+    Create an A2A DataPart for tool execution results.
+    
+    The frontend parses data.type == 'tool_result' to update the chain-of-thought
+    card with a checkmark and expandable result content.
+    
+    Args:
+        tool_name: Name of the tool that executed
+        result: The result returned by the tool
+        tool_call_id: Unique ID matching the original tool call
+        status: Execution status (success, error, etc.)
+        truncate_at: Max chars for result in data (full result can overflow)
+        
+    Returns:
+        A2A DataPart dict: {"kind": "data", "data": {"type": "tool_result", ...}}
+    """
+    result_str = str(result)
+    result_preview = result_str[:truncate_at] + "..." if len(result_str) > truncate_at else result_str
+    
+    data = {
+        "type": "tool_result",
+        "tool_name": tool_name,
+        "result": result_preview,
+        "result_length": len(result_str),
+        "status": status
+    }
+    if tool_call_id:
+        data["tool_call_id"] = tool_call_id
+    
+    return {
+        "kind": "data",
+        "data": data
+    }
+
+
+def create_status_text_part(
+    message: str,
+    state: str = "working"
+) -> Dict[str, Any]:
+    """
+    Create an A2A TextPart for status updates.
+    
+    Args:
+        message: Status message to display
+        state: Current state (working, completed, error, etc.)
+        
+    Returns:
+        A2A TextPart dict with status metadata
+    """
+    return {
+        "kind": "text",
+        "text": message,
+        "metadata": {
+            "content_type": ContentType.STATUS,
+            "state": state
+        }
+    }
