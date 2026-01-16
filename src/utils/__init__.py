@@ -12,6 +12,13 @@ MAIN EXPORTS:
 - create_langgraph_agent: Factory function to create agents with tools
 - A2A Extensions: Citation, Error, Form, Trajectory utilities
 - Extension URIs: Centralized URI constants for A2A protocol
+- A2A Parts: DataPart helpers for Carbon AI Chat compatibility
+
+DOCUMENTATION REFERENCES:
+-------------------------
+- AgentStack messages: https://raw.githubusercontent.com/i-am-bee/agentstack/main/docs/stable/agent-integration/messages.mdx
+- AgentStack trajectory: https://raw.githubusercontent.com/i-am-bee/agentstack/main/docs/stable/agent-integration/trajectory.mdx
+- Carbon AI Chat: https://github.com/carbon-design-system/carbon-ai-chat
 
 USAGE:
 ------
@@ -42,7 +49,10 @@ from utils import (
     create_citation_metadata,
     create_error_metadata,
     create_form_request_metadata,
-    create_trajectory_metadata
+    create_trajectory_metadata,
+    # NEW: A2A DataPart helpers for Carbon AI Chat
+    emit_tool_call_with_trajectory,
+    emit_tool_result_with_trajectory,
 )
 ```
 
@@ -161,6 +171,25 @@ from .bee_citations import (
 )
 
 # -----------------------------------------------------------------------------
+# A2A Parts - DataPart helpers for Carbon AI Chat compatibility
+# -----------------------------------------------------------------------------
+from .a2a_parts import (
+    # Content type constants
+    A2AContentType,
+    # DataPart creators
+    create_tool_call_data_part,
+    create_tool_result_data_part,
+    create_thinking_text_part,
+    create_response_text_part,
+    # AgentMessage helpers
+    create_tool_call_agent_message,
+    create_tool_result_agent_message,
+    # Dual-emit helpers (trajectory + DataPart)
+    emit_tool_call_with_trajectory,
+    emit_tool_result_with_trajectory,
+)
+
+# -----------------------------------------------------------------------------
 # Public API
 # -----------------------------------------------------------------------------
 __all__ = [
@@ -200,6 +229,17 @@ __all__ = [
     "create_tool_call_trajectory_metadata",
     "create_tool_result_trajectory_metadata",
     "create_status_trajectory_metadata",
+
+    # A2A Parts - DataPart helpers (Carbon AI Chat compatibility)
+    "A2AContentType",
+    "create_tool_call_data_part",
+    "create_tool_result_data_part",
+    "create_thinking_text_part",
+    "create_response_text_part",
+    "create_tool_call_agent_message",
+    "create_tool_result_agent_message",
+    "emit_tool_call_with_trajectory",
+    "emit_tool_result_with_trajectory",
 
     # Citation (A2A Protocol)
     "Citation",

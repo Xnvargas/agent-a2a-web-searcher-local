@@ -93,6 +93,11 @@ from utils.content_parts import (
     create_tool_call_trajectory_metadata,
     create_tool_result_trajectory_metadata,
 )
+# A2A Parts - Dual-emit helpers for Carbon AI Chat compatibility
+from utils.a2a_parts import (
+    emit_tool_call_with_trajectory,
+    emit_tool_result_with_trajectory,
+)
 from utils.error_extension import (
     create_error_metadata,
     create_error_metadata_from_exception,
@@ -460,16 +465,20 @@ async def a2a_starter(
                         tool_args_tc = tc.get('args', {})
                         tool_call_id = tc.get('id')
 
-                        # Emit structured tool call trajectory with content type metadata
-                        title, content = format_tool_call_trajectory(
+                        # FIXED: Emit BOTH trajectory metadata AND DataPart
+                        # This ensures compatibility with:
+                        # 1. AgentStack trajectory UI
+                        # 2. Standard A2A clients expecting DataPart
+                        # 3. Carbon AI Chat chain_of_thought rendering
+                        #
+                        # Reference: https://raw.githubusercontent.com/i-am-bee/agentstack/main/docs/stable/agent-integration/messages.mdx
+                        for item in emit_tool_call_with_trajectory(
+                            trajectory_server=trajectory,
                             tool_name=tool_name_tc,
                             args=tool_args_tc,
                             tool_call_id=tool_call_id
-                        )
-                        yield trajectory.trajectory_metadata(
-                            title=title,
-                            content=content
-                        )
+                        ):
+                            yield item
 
                         tool_instance = get_tool_by_name(tool_name_tc)
                         if tool_instance:
@@ -485,17 +494,17 @@ async def a2a_starter(
                 tool_name = getattr(chunk, 'name', 'unknown')
                 tool_call_id = getattr(chunk, 'tool_call_id', None)
 
-                # Emit structured tool result trajectory with content type metadata
-                title, content = format_tool_result_trajectory(
+                # FIXED: Emit BOTH trajectory metadata AND DataPart
+                # Reference: Carbon chain_of_thought expects status field
+                # https://github.com/carbon-design-system/carbon-ai-chat/blob/main/examples/react/reasoning-and-chain-of-thought/src/scenarios.ts
+                for item in emit_tool_result_with_trajectory(
+                    trajectory_server=trajectory,
                     tool_name=tool_name,
                     result=chunk.content,
                     tool_call_id=tool_call_id,
                     status="success"
-                )
-                yield trajectory.trajectory_metadata(
-                    title=title,
-                    content=content
-                )
+                ):
+                    yield item
 
                 # Generate citation for this tool result
                 for exec_info in tool_executions:
