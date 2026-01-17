@@ -146,7 +146,12 @@ server = Server()
         # These should match tools registered in the tools/ package
         # ---------------------------------------------------------------------
         tools=[
-            # SearxNG Search Tool
+            # Tavily Search Tool (AI-optimized web search)
+            AgentDetailTool(
+                name="tavily_search",
+                description="Search the web using Tavily AI-optimized search engine. Returns comprehensive, accurate results with snippets optimized for AI agents.",
+            ),
+            # SearxNG Search Tool (fallback)
             AgentDetailTool(
                 name="searx_search",
                 description="Search the web using SearxNG metasearch engine. Returns structured results with titles, snippets, links, and source engines from multiple search engines.",
@@ -402,9 +407,9 @@ async def a2a_starter(
     # -------------------------------------------------------------------------
     # TOKEN-LEVEL STREAMING WITH CONTENT CATEGORIZATION & ERROR HANDLING
     #
-    # Content is categorized based on position relative to tool calls:
-    # - Before any tool calls = "thinking" content (reasoning)
-    # - After tool executions = "response" content (final answer)
+    # With ChatOllama + reasoning=True, thinking tokens are captured in:
+    #   chunk.additional_kwargs['reasoning_content']
+    # while response tokens remain in chunk.content
     #
     # This enables Carbon frontend to render:
     # - thinking -> reasoning.steps / reasoning.content (accordion)
@@ -414,6 +419,13 @@ async def a2a_starter(
     #
     # Error handling emits structured error metadata via A2A error extension
     # -------------------------------------------------------------------------
+
+    # Console logging for debugging
+    print(f"\n{'='*60}")
+    print(f"[AGENT] Starting stream for message: {current_message[:100]}...")
+    print(f"[AGENT] Thinking mode enabled: {is_thinking_enabled}")
+    print(f"{'='*60}\n")
+
     try:
         async for chunk, metadata in agent.astream(
             {
@@ -428,11 +440,47 @@ async def a2a_starter(
 
             # Handle streaming LLM tokens (AIMessageChunk)
             if isinstance(chunk, AIMessageChunk):
-                # Stream text content token-by-token to frontend
+                # ---------------------------------------------------------------
+                # REASONING CONTENT (ChatOllama with reasoning=True)
+                # Check for reasoning_content in additional_kwargs FIRST
+                # This is where thinking tokens appear when using reasoning=True
+                # ---------------------------------------------------------------
+                reasoning_content = chunk.additional_kwargs.get('reasoning_content', '')
+
+                if reasoning_content:
+                    # THINKING TOKENS - Stream separately
+                    accumulated_thinking += reasoning_content
+
+                    # Debug: Print to console
+                    print(f"[THINKING] Streaming: {reasoning_content[:80]}..." if len(reasoning_content) > 80 else f"[THINKING] Streaming: {reasoning_content}")
+
+                    if is_thinking_enabled:
+                        # Stream thinking to frontend
+                        yield reasoning_content  # Real-time thinking token
+
+                        # Periodically emit thinking metadata (every ~100 chars)
+                        if len(accumulated_thinking) % 100 < 10:
+                            thinking_step += 1
+                            title, content = format_thinking_trajectory(
+                                accumulated_thinking[-200:],  # Last 200 chars
+                                step_number=thinking_step
+                            )
+                            yield trajectory.trajectory_metadata(
+                                title=title,
+                                content=content
+                            )
+
+                # ---------------------------------------------------------------
+                # RESPONSE CONTENT (main text content)
+                # ---------------------------------------------------------------
                 if chunk.content:
+                    # Debug: Print to console
+                    print(f"[RESPONSE] Streaming: {chunk.content[:80]}..." if len(chunk.content) > 80 else f"[RESPONSE] Streaming: {chunk.content}")
+
                     # Categorize content based on position relative to tool calls
-                    if tool_calls_count == 0:
+                    if tool_calls_count == 0 and not reasoning_content:
                         # THINKING: Before any tool calls = reasoning content
+                        # (fallback for models that don't use reasoning_content)
                         accumulated_thinking += chunk.content
 
                         # Emit thinking trajectory with metadata for frontend
@@ -523,6 +571,12 @@ async def a2a_starter(
 
         # Use accumulated_response for final processing
         final_response = accumulated_response
+
+        # Stream completion logging
+        print(f"\n[AGENT] Stream complete. Stats:")
+        print(f"  - Thinking tokens: {len(accumulated_thinking)} chars")
+        print(f"  - Response tokens: {len(accumulated_response)} chars")
+        print(f"  - Tool calls: {tool_calls_count}")
 
         # ---------------------------------------------------------------------
         # Post-Streaming: Handle Citations and Storage
