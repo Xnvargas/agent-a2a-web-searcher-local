@@ -100,6 +100,9 @@ from .base import LangChainTool
 # SearxNG - Privacy-respecting metasearch
 from . import searx
 
+# Tavily - AI-optimized web search
+from . import tavily
+
 # -----------------------------------------------------------------------------
 # ADD NEW LANGCHAIN SERVICES HERE:
 # Example:

@@ -24,9 +24,9 @@ from utils import create_langgraph_agent
 from tools import get_all_tools
 
 agent = create_langgraph_agent(
-    api_model="granite-4:micro-h",
-    api_key="your-key",
-    api_base="http://localhost:11434/v1",
+    api_model="qwen3-next:80b-a3b-thinking-q4_K_M",
+    api_key="unused",  # Ollama doesn't require authentication
+    api_base="http://localhost:11434",  # Ollama native API (no /v1 suffix)
     tools=get_all_tools()
 )
 ```
@@ -38,13 +38,13 @@ from tools import get_tool_by_name
 # Only use specific tools
 custom_tools = [
     get_tool_by_name("firecrawl_scrape"),
-    get_tool_by_name("searx_search"),
+    get_tool_by_name("tavily_search"),
 ]
 
 agent = create_langgraph_agent(
-    api_model="...",
-    api_key="...",
-    api_base="...",
+    api_model="qwen3:latest",
+    api_key="unused",
+    api_base="http://localhost:11434",
     tools=custom_tools
 )
 ```
@@ -64,7 +64,7 @@ from typing import List, Literal, Callable, Optional, Dict, Any
 import operator
 import json
 
-from langchain_openai import ChatOpenAI
+from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, ToolMessage
 from typing_extensions import TypedDict, Annotated
 from langgraph.graph import StateGraph, START, END
@@ -204,13 +204,22 @@ def create_langgraph_agent(
     # -------------------------------------------------------------------------
     # Initialize LLM
     # -------------------------------------------------------------------------
-    
-    llm = ChatOpenAI(
+
+    # ChatOllama with reasoning=True captures thinking tokens separately in
+    # additional_kwargs['reasoning_content'] - enabling proper streaming of
+    # thinking vs response content. Remove /v1 suffix as Ollama uses native API.
+    ollama_base_url = api_base.rstrip('/').replace('/v1', '')
+
+    print(f"   Ollama Base URL: {ollama_base_url}")
+    print(f"   Reasoning Mode: ENABLED (thinking tokens captured separately)")
+
+    llm = ChatOllama(
+        base_url=ollama_base_url,
         model=api_model,
-        api_key=api_key,
-        base_url=api_base,
         temperature=temperature,
+        reasoning=True,  # Critical: Captures thinking tokens in additional_kwargs['reasoning_content']
         streaming=True,  # Enable token-level streaming
+        # num_predict=-1,  # Optional: Unlimited token generation
     )
     
     # -------------------------------------------------------------------------
