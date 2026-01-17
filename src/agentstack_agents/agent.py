@@ -113,8 +113,8 @@ import traceback
 # -----------------------------------------------------------------------------
 STANDALONE_LLM_API_BASE = os.getenv("LLM_API_BASE", "http://192.168.0.58:11434/v1")
 STANDALONE_LLM_API_KEY = os.getenv("LLM_API_KEY", "dummy")
-STANDALONE_LLM_MODEL = os.getenv("LLM_MODEL", "qwen3-next:80b-a3b-thinking-q4_K_M")
-
+STANDALONE_LLM_MODEL = os.getenv("LLM_MODEL", "nemotron-3-nano:latest")
+# qwen3-next:80b-a3b-thinking-q4_K_M
 
 # =============================================================================
 # SERVER DEFINITION
