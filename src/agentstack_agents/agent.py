@@ -95,6 +95,8 @@ from utils.content_parts import (
 )
 # A2A Parts - Dual-emit helpers for Carbon AI Chat compatibility
 from utils.a2a_parts import (
+    create_thinking_text_part,
+    create_response_text_part,
     emit_tool_call_with_trajectory,
     emit_tool_result_with_trajectory,
 )
@@ -455,20 +457,25 @@ async def a2a_starter(
                     print(f"[THINKING] Streaming: {reasoning_content[:80]}..." if len(reasoning_content) > 80 else f"[THINKING] Streaming: {reasoning_content}")
 
                     if is_thinking_enabled:
-                        # Stream thinking to frontend
-                        yield reasoning_content  # Real-time thinking token
+                        # ✅ FIXED: Emit TextPart with thinking metadata
+                        # Determine step title based on content patterns
+                        step_title = None
+                        if "analyze" in reasoning_content.lower() or "understand" in reasoning_content.lower():
+                            step_title = "Analyzing Query"
+                        elif "search" in reasoning_content.lower() or "find" in reasoning_content.lower():
+                            step_title = "Planning Search"
+                        elif "result" in reasoning_content.lower() or "found" in reasoning_content.lower():
+                            step_title = "Evaluating Results"
 
-                        # Periodically emit thinking metadata (every ~100 chars)
-                        if len(accumulated_thinking) % 100 < 10:
+                        yield create_thinking_text_part(
+                            content=reasoning_content,
+                            step_number=thinking_step,
+                            title=step_title
+                        )
+
+                        # Increment step counter periodically for better UX grouping
+                        if len(accumulated_thinking) % 200 < len(reasoning_content):
                             thinking_step += 1
-                            title, content = format_thinking_trajectory(
-                                accumulated_thinking[-200:],  # Last 200 chars
-                                step_number=thinking_step
-                            )
-                            yield trajectory.trajectory_metadata(
-                                title=title,
-                                content=content
-                            )
 
                 # ---------------------------------------------------------------
                 # RESPONSE CONTENT (main text content)
@@ -485,23 +492,19 @@ async def a2a_starter(
 
                         # Emit thinking trajectory with metadata for frontend
                         if is_thinking_enabled:
-                            # Stream to frontend with thinking context
-                            yield chunk.content  # Real-time token
+                            # ✅ FIXED: Emit TextPart with thinking metadata
+                            yield create_thinking_text_part(
+                                content=chunk.content,
+                                step_number=thinking_step
+                            )
 
-                            # Periodically emit thinking metadata (every ~100 chars)
-                            if len(accumulated_thinking) % 100 < 10:
+                            # Increment step periodically
+                            if len(accumulated_thinking) % 200 < len(chunk.content):
                                 thinking_step += 1
-                                title, content = format_thinking_trajectory(
-                                    accumulated_thinking[-200:],  # Last 200 chars
-                                    step_number=thinking_step
-                                )
-                                yield trajectory.trajectory_metadata(
-                                    title=title,
-                                    content=content
-                                )
                     else:
                         # RESPONSE: After tool calls = final response content
-                        yield chunk.content  # Real-time token to frontend
+                        # ✅ IMPROVED: Emit TextPart with response metadata
+                        yield create_response_text_part(chunk.content)
                         accumulated_response += chunk.content
 
                 # Track tool calls (come as chunks during streaming)
