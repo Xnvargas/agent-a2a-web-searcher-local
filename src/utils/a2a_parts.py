@@ -196,7 +196,8 @@ def create_tool_result_data_part(
 
 def create_thinking_text_part(
     content: str,
-    step_number: Optional[int] = None
+    step_number: Optional[int] = None,
+    title: Optional[str] = None
 ) -> TextPart:
     """
     Create an A2A TextPart for thinking/reasoning content.
@@ -211,6 +212,7 @@ def create_thinking_text_part(
     Args:
         content: The thinking/reasoning text content
         step_number: Optional step number for ordered display
+        title: Optional title for the reasoning step (e.g., "Analyzing Query")
 
     Returns:
         A2A TextPart object ready to be yielded
@@ -220,6 +222,8 @@ def create_thinking_text_part(
     }
     if step_number is not None:
         metadata["step"] = step_number
+    if title is not None:
+        metadata["title"] = title
 
     # Return as TextPart
     if isinstance(TextPart, type) and TextPart != dict:
