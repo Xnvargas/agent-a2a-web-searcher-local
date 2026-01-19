@@ -459,7 +459,7 @@ async def a2a_starter(
                     if is_thinking_enabled:
                         # ✅ FIXED: Emit TextPart with thinking metadata
                         # Determine step title based on content patterns
-                        step_title = None
+                        step_title = "Thinking"
                         if "analyze" in reasoning_content.lower() or "understand" in reasoning_content.lower():
                             step_title = "Analyzing Query"
                         elif "search" in reasoning_content.lower() or "find" in reasoning_content.lower():
