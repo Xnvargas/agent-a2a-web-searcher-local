@@ -421,3 +421,128 @@ def emit_tool_result_with_trajectory(
         title=title,
         error=error
     )
+
+
+# =============================================================================
+# AGENTMESSAGE WRAPPER HELPERS
+# =============================================================================
+# These functions wrap TextPart/DataPart in AgentMessage for proper A2A
+# protocol serialization. Use these when yielding from the agent instead
+# of the raw create_*_part() functions.
+
+def emit_thinking_part(
+    content: str,
+    step_number: Optional[int] = None,
+    title: Optional[str] = None
+):
+    """
+    Emit a thinking TextPart wrapped in AgentMessage for proper A2A serialization.
+
+    Use this instead of create_thinking_text_part() when yielding from the agent.
+    The AgentStack SDK requires AgentMessage objects to properly serialize parts
+    into the A2A protocol stream.
+
+    Args:
+        content: The thinking/reasoning text content
+        step_number: Optional step number for ordered display
+        title: Optional title for the reasoning step
+
+    Returns:
+        AgentMessage containing the thinking TextPart
+
+    Example:
+        >>> yield emit_thinking_part("Analyzing the query...", step_number=1)
+    """
+    try:
+        from agentstack_sdk.a2a.types import AgentMessage
+        part = create_thinking_text_part(content, step_number, title)
+        return AgentMessage(parts=[part])
+    except ImportError:
+        # Fallback if SDK not available (standalone testing)
+        return create_thinking_text_part(content, step_number, title)
+
+
+def emit_response_part(content: str):
+    """
+    Emit a response TextPart wrapped in AgentMessage for proper A2A serialization.
+
+    Use this instead of create_response_text_part() when yielding from the agent.
+    The AgentStack SDK requires AgentMessage objects to properly serialize parts
+    into the A2A protocol stream.
+
+    Args:
+        content: The response text content
+
+    Returns:
+        AgentMessage containing the response TextPart
+
+    Example:
+        >>> yield emit_response_part("Based on my analysis, here are the results...")
+    """
+    try:
+        from agentstack_sdk.a2a.types import AgentMessage
+        part = create_response_text_part(content)
+        return AgentMessage(parts=[part])
+    except ImportError:
+        # Fallback if SDK not available (standalone testing)
+        return create_response_text_part(content)
+
+
+def emit_tool_call_part(
+    tool_name: str,
+    args: Dict[str, Any],
+    tool_call_id: Optional[str] = None,
+    title: Optional[str] = None
+):
+    """
+    Emit a tool call DataPart wrapped in AgentMessage for proper A2A serialization.
+
+    Note: For full compatibility with AgentStack trajectory UI, use
+    emit_tool_call_with_trajectory() instead, which emits both trajectory
+    metadata AND the DataPart.
+
+    Args:
+        tool_name: Name of the tool being called
+        args: Arguments passed to the tool
+        tool_call_id: Optional unique ID for the tool call
+        title: Optional display title
+
+    Returns:
+        AgentMessage containing the tool call DataPart
+    """
+    try:
+        from agentstack_sdk.a2a.types import AgentMessage
+        part = create_tool_call_data_part(tool_name, args, tool_call_id, title)
+        return AgentMessage(parts=[part])
+    except ImportError:
+        return create_tool_call_data_part(tool_name, args, tool_call_id, title)
+
+
+def emit_tool_result_part(
+    tool_name: str,
+    result: Any,
+    tool_call_id: Optional[str] = None,
+    error: bool = False
+):
+    """
+    Emit a tool result DataPart wrapped in AgentMessage for proper A2A serialization.
+
+    Note: For full compatibility with AgentStack trajectory UI, use
+    emit_tool_result_with_trajectory() instead, which emits both trajectory
+    metadata AND the DataPart.
+
+    Args:
+        tool_name: Name of the tool that was executed
+        result: The result returned by the tool
+        tool_call_id: Optional unique ID matching the tool call
+        error: Whether the tool execution resulted in an error
+
+    Returns:
+        AgentMessage containing the tool result DataPart
+    """
+    try:
+        from agentstack_sdk.a2a.types import AgentMessage
+        part = create_tool_result_data_part(tool_name, result, tool_call_id, error=error)
+        return AgentMessage(parts=[part])
+    except ImportError:
+        return create_tool_result_data_part(tool_name, result, tool_call_id, error=error)
