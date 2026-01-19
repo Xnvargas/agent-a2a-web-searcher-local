@@ -490,18 +490,18 @@ async def a2a_starter(
                         accumulated_thinking += reasoning_content
                         print(f"[THINKING] Streaming: {reasoning_content[:80]}..." if len(reasoning_content) > 80 else f"[THINKING] Streaming: {reasoning_content}")
 
-                    if is_thinking_enabled:
-                        # ✅ FIXED: Emit TextPart with thinking metadata
-                        # Determine step title based on content patterns
-                        step_title = "Thinking"
-                        if "analyze" in reasoning_content.lower() or "understand" in reasoning_content.lower():
-                            step_title = "Analyzing Query"
-                        elif "search" in reasoning_content.lower() or "find" in reasoning_content.lower():
-                            step_title = "Planning Search"
-                        elif "result" in reasoning_content.lower() or "found" in reasoning_content.lower():
-                            step_title = "Evaluating Results"
+                        # ✅ FIXED: Moved inside else block and emit for ALL thinking content
+                        if is_thinking_enabled:
+                            # Determine step title based on content patterns
+                            step_title = "Thinking"
+                            if "analyze" in reasoning_content.lower() or "understand" in reasoning_content.lower():
+                                step_title = "Analyzing Query"
+                            elif "search" in reasoning_content.lower() or "find" in reasoning_content.lower():
+                                step_title = "Planning Search"
+                            elif "result" in reasoning_content.lower() or "found" in reasoning_content.lower():
+                                step_title = "Evaluating Results"
 
-                            # CRITICAL: Use emit_thinking_part() to wrap in AgentMessage
+                            # ✅ FIXED: Moved OUTSIDE elif blocks - runs for ALL thinking content
                             yield emit_thinking_part(
                                 content=reasoning_content,
                                 step_number=thinking_step,
