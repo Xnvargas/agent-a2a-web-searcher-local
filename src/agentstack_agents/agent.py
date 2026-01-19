@@ -97,6 +97,8 @@ from utils.content_parts import (
 from utils.a2a_parts import (
     create_thinking_text_part,
     create_response_text_part,
+    emit_thinking_part,           # Wrapped version for yielding
+    emit_response_part,           # Wrapped version for yielding
     emit_tool_call_with_trajectory,
     emit_tool_result_with_trajectory,
 )
@@ -403,6 +405,7 @@ async def a2a_starter(
     accumulated_thinking = ""  # Accumulate thinking content (before tool calls)
     tool_calls_count = 0
     thinking_step = 0  # Counter for thinking steps
+    tools_completed = False  # Track when tool execution has finished
 
     config = {"recursion_limit": 100}
 
@@ -412,6 +415,14 @@ async def a2a_starter(
     # With ChatOllama + reasoning=True, thinking tokens are captured in:
     #   chunk.additional_kwargs['reasoning_content']
     # while response tokens remain in chunk.content
+    #
+    # IMPORTANT: Some models (Qwen, DeepSeek) put ALL content in reasoning_content,
+    # including the final response. We detect this by tracking tool completion
+    # state and reclassifying post-tool reasoning_content as response content.
+    #
+    # CRITICAL: All parts must be wrapped in AgentMessage for proper A2A
+    # serialization. Use emit_thinking_part() and emit_response_part() instead
+    # of the raw create_*_part() functions.
     #
     # This enables Carbon frontend to render:
     # - thinking -> reasoning.steps / reasoning.content (accordion)
@@ -446,54 +457,84 @@ async def a2a_starter(
                 # REASONING CONTENT (ChatOllama with reasoning=True)
                 # Check for reasoning_content in additional_kwargs FIRST
                 # This is where thinking tokens appear when using reasoning=True
+                #
+                # CRITICAL FIX: Some models put ALL output in reasoning_content,
+                # including the final response after tool execution. We detect
+                # this by checking if tools have completed execution.
                 # ---------------------------------------------------------------
                 reasoning_content = chunk.additional_kwargs.get('reasoning_content', '')
 
                 if reasoning_content:
-                    # THINKING TOKENS - Stream separately
-                    accumulated_thinking += reasoning_content
+                    # Determine if this is true thinking or post-tool response
+                    # After tools complete, reasoning_content is actually the response
+                    is_final_response_phase = tools_completed
 
-                    # Debug: Print to console
-                    print(f"[THINKING] Streaming: {reasoning_content[:80]}..." if len(reasoning_content) > 80 else f"[THINKING] Streaming: {reasoning_content}")
+                    # Also check for tool_call XML tags - those are still "thinking"
+                    # even if we're in the middle of tool execution
+                    contains_tool_call_xml = '<tool_call' in reasoning_content or '<function=' in reasoning_content
 
-                    if is_thinking_enabled:
-                        # ✅ FIXED: Emit TextPart with thinking metadata
-                        # Determine step title based on content patterns
-                        step_title = None
-                        if "analyze" in reasoning_content.lower() or "understand" in reasoning_content.lower():
-                            step_title = "Analyzing Query"
-                        elif "search" in reasoning_content.lower() or "find" in reasoning_content.lower():
-                            step_title = "Planning Search"
-                        elif "result" in reasoning_content.lower() or "found" in reasoning_content.lower():
-                            step_title = "Evaluating Results"
+                    if is_final_response_phase and not contains_tool_call_xml:
+                        # -----------------------------------------------------
+                        # POST-TOOL RESPONSE: Model is generating final answer
+                        # but putting it in reasoning_content instead of content
+                        # -----------------------------------------------------
+                        print(f"[RESPONSE*] Streaming (from reasoning): {reasoning_content[:80]}..." if len(reasoning_content) > 80 else f"[RESPONSE*] Streaming (from reasoning): {reasoning_content}")
 
-                        yield create_thinking_text_part(
-                            content=reasoning_content,
-                            step_number=thinking_step,
-                            title=step_title
-                        )
+                        # CRITICAL: Use emit_response_part() to wrap in AgentMessage
+                        yield emit_response_part(reasoning_content)
+                        accumulated_response += reasoning_content
+                    else:
+                        # -----------------------------------------------------
+                        # TRUE THINKING: Pre-tool reasoning or tool call planning
+                        # -----------------------------------------------------
+                        accumulated_thinking += reasoning_content
+                        print(f"[THINKING] Streaming: {reasoning_content[:80]}..." if len(reasoning_content) > 80 else f"[THINKING] Streaming: {reasoning_content}")
 
-                        # Increment step counter periodically for better UX grouping
-                        if len(accumulated_thinking) % 200 < len(reasoning_content):
-                            thinking_step += 1
+                        if is_thinking_enabled:
+                            # Determine step title based on content patterns
+                            step_title = None
+                            lower_content = reasoning_content.lower()
+                            if "analyze" in lower_content or "understand" in lower_content:
+                                step_title = "Analyzing Query"
+                            elif "search" in lower_content or "find" in lower_content:
+                                step_title = "Planning Search"
+                            elif "result" in lower_content or "found" in lower_content:
+                                step_title = "Evaluating Results"
+                            elif "tool" in lower_content or "function" in lower_content:
+                                step_title = "Planning Tool Use"
+                            elif "error" in lower_content or "fail" in lower_content:
+                                step_title = "Handling Error"
+
+                            # CRITICAL: Use emit_thinking_part() to wrap in AgentMessage
+                            yield emit_thinking_part(
+                                content=reasoning_content,
+                                step_number=thinking_step,
+                                title=step_title
+                            )
+
+                            # Increment step counter periodically for better UX grouping
+                            if len(accumulated_thinking) % 200 < len(reasoning_content):
+                                thinking_step += 1
 
                 # ---------------------------------------------------------------
                 # RESPONSE CONTENT (main text content)
+                # This is the standard path for models that properly separate
+                # thinking from response content.
                 # ---------------------------------------------------------------
                 if chunk.content:
                     # Debug: Print to console
                     print(f"[RESPONSE] Streaming: {chunk.content[:80]}..." if len(chunk.content) > 80 else f"[RESPONSE] Streaming: {chunk.content}")
 
                     # Categorize content based on position relative to tool calls
-                    if tool_calls_count == 0 and not reasoning_content:
+                    if tool_calls_count == 0 and not tools_completed and not reasoning_content:
                         # THINKING: Before any tool calls = reasoning content
                         # (fallback for models that don't use reasoning_content)
                         accumulated_thinking += chunk.content
 
                         # Emit thinking trajectory with metadata for frontend
                         if is_thinking_enabled:
-                            # ✅ FIXED: Emit TextPart with thinking metadata
-                            yield create_thinking_text_part(
+                            # CRITICAL: Use emit_thinking_part() to wrap in AgentMessage
+                            yield emit_thinking_part(
                                 content=chunk.content,
                                 step_number=thinking_step
                             )
@@ -503,13 +544,18 @@ async def a2a_starter(
                                 thinking_step += 1
                     else:
                         # RESPONSE: After tool calls = final response content
-                        # ✅ IMPROVED: Emit TextPart with response metadata
-                        yield create_response_text_part(chunk.content)
+                        # CRITICAL: Use emit_response_part() to wrap in AgentMessage
+                        yield emit_response_part(chunk.content)
                         accumulated_response += chunk.content
 
-                # Track tool calls (come as chunks during streaming)
+                # ---------------------------------------------------------------
+                # TOOL CALLS (come as chunks during streaming)
+                # ---------------------------------------------------------------
                 if chunk.tool_calls:
                     tool_calls_count += len(chunk.tool_calls)
+                    # Reset tools_completed when new tool calls come in
+                    # (handles multi-round tool usage)
+                    tools_completed = False
 
                     for tc in chunk.tool_calls:
                         tool_name_tc = tc.get('name', 'unknown')
@@ -540,12 +586,19 @@ async def a2a_starter(
                                 "tool_instance": tool_instance
                             })
 
-            # Handle tool execution results (ToolMessage)
+            # -------------------------------------------------------------------
+            # TOOL EXECUTION RESULTS (ToolMessage)
+            # -------------------------------------------------------------------
             elif hasattr(chunk, 'tool_call_id') and hasattr(chunk, 'content'):
                 tool_name = getattr(chunk, 'name', 'unknown')
                 tool_call_id = getattr(chunk, 'tool_call_id', None)
 
-                # FIXED: Emit BOTH trajectory metadata AND DataPart
+                # CRITICAL: Mark that tool execution has completed
+                # This triggers the phase change for reasoning_content handling
+                tools_completed = True
+                print(f"[TOOL COMPLETE] {tool_name} finished - switching to response phase")
+
+                # Emit BOTH trajectory metadata AND DataPart
                 # Reference: Carbon chain_of_thought expects status field
                 # https://github.com/carbon-design-system/carbon-ai-chat/blob/main/examples/react/reasoning-and-chain-of-thought/src/scenarios.ts
                 for item in emit_tool_result_with_trajectory(
@@ -576,10 +629,13 @@ async def a2a_starter(
         final_response = accumulated_response
 
         # Stream completion logging
-        print(f"\n[AGENT] Stream complete. Stats:")
+        print(f"\n{'='*60}")
+        print(f"[AGENT] Stream complete. Stats:")
         print(f"  - Thinking tokens: {len(accumulated_thinking)} chars")
         print(f"  - Response tokens: {len(accumulated_response)} chars")
         print(f"  - Tool calls: {tool_calls_count}")
+        print(f"  - Tools completed: {tools_completed}")
+        print(f"{'='*60}\n")
 
         # ---------------------------------------------------------------------
         # Post-Streaming: Handle Citations and Storage
