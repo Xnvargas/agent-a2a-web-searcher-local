@@ -97,8 +97,9 @@ from utils.content_parts import (
 from utils.a2a_parts import (
     create_thinking_text_part,
     create_response_text_part,
-    emit_thinking_part,           # Wrapped version for yielding
+    emit_thinking_part,           # Wrapped version for yielding (initial phase)
     emit_response_part,           # Wrapped version for yielding
+    emit_reasoning_step,          # Batched reasoning steps (post-tool phase)
     emit_tool_call_with_trajectory,
     emit_tool_result_with_trajectory,
 )
@@ -407,6 +408,19 @@ async def a2a_starter(
     thinking_step = 0  # Counter for thinking steps
     tools_completed = False  # Track when tool execution has finished
 
+    # =========================================================================
+    # REASONING VISUALIZATION STATE MACHINE
+    # =========================================================================
+    # Phases:
+    #   "initial"   - Pre-tool: Stream tokens to reasoning.content
+    #   "post_tool" - Between tools: Accumulate reasoning into buffer
+    #   "final"     - Response: Flush buffer as step, stream response text
+    # =========================================================================
+    thinking_phase = "initial"  # Current phase: "initial" | "post_tool" | "final"
+    post_tool_buffer = ""       # Accumulates reasoning between tool calls
+    last_tool_name = None       # For titling the reasoning step
+    reasoning_step_counter = 0  # Counter for batched reasoning steps
+
     config = {"recursion_limit": 100}
 
     # -------------------------------------------------------------------------
@@ -467,7 +481,7 @@ async def a2a_starter(
                 if reasoning_content:
                     # Determine if this is true thinking or post-tool response
                     # After tools complete, reasoning_content is actually the response
-                    is_final_response_phase = tools_completed
+                    is_final_response_phase = tools_completed and thinking_phase == "final"
 
                     # Also check for tool_call XML tags - those are still "thinking"
                     # even if we're in the middle of tool execution
@@ -475,22 +489,43 @@ async def a2a_starter(
 
                     if is_final_response_phase and not contains_tool_call_xml:
                         # -----------------------------------------------------
-                        # POST-TOOL RESPONSE: Model is generating final answer
+                        # PHASE 3 - FINAL RESPONSE: Model is generating final answer
                         # but putting it in reasoning_content instead of content
                         # -----------------------------------------------------
+
+                        # Flush any remaining post-tool buffer first
+                        if thinking_phase != "final":
+                            if post_tool_buffer.strip():
+                                step_title = f"Analyzing {last_tool_name} results" if last_tool_name else "Preparing response"
+                                print(f"[PHASE->FINAL*] Flushing buffer as step: {step_title}")
+
+                                if is_thinking_enabled:
+                                    yield emit_reasoning_step(
+                                        title=step_title,
+                                        content=post_tool_buffer.strip(),
+                                        step_number=reasoning_step_counter
+                                    )
+                                    reasoning_step_counter += 1
+
+                                post_tool_buffer = ""
+
+                            thinking_phase = "final"
+                            print(f"[PHASE] Transitioning to 'final' (from reasoning_content)")
+
                         print(f"[RESPONSE*] Streaming (from reasoning): {reasoning_content[:80]}..." if len(reasoning_content) > 80 else f"[RESPONSE*] Streaming (from reasoning): {reasoning_content}")
 
                         # CRITICAL: Use emit_response_part() to wrap in AgentMessage
                         yield emit_response_part(reasoning_content)
                         accumulated_response += reasoning_content
-                    else:
+
+                    elif thinking_phase == "initial":
                         # -----------------------------------------------------
-                        # TRUE THINKING: Pre-tool reasoning or tool call planning
+                        # PHASE 1 - INITIAL THINKING: Pre-tool reasoning
+                        # Stream tokens directly to reasoning.content
                         # -----------------------------------------------------
                         accumulated_thinking += reasoning_content
-                        print(f"[THINKING] Streaming: {reasoning_content[:80]}..." if len(reasoning_content) > 80 else f"[THINKING] Streaming: {reasoning_content}")
+                        print(f"[THINKING] Phase 1 Streaming: {reasoning_content[:80]}..." if len(reasoning_content) > 80 else f"[THINKING] Phase 1 Streaming: {reasoning_content}")
 
-                        # ✅ FIXED: Moved inside else block and emit for ALL thinking content
                         if is_thinking_enabled:
                             # Determine step title based on content patterns
                             step_title = "Thinking"
@@ -501,7 +536,6 @@ async def a2a_starter(
                             elif "result" in reasoning_content.lower() or "found" in reasoning_content.lower():
                                 step_title = "Evaluating Results"
 
-                            # ✅ FIXED: Moved OUTSIDE elif blocks - runs for ALL thinking content
                             yield emit_thinking_part(
                                 content=reasoning_content,
                                 step_number=thinking_step,
@@ -511,6 +545,15 @@ async def a2a_starter(
                             # Increment step counter periodically for better UX grouping
                             if len(accumulated_thinking) % 200 < len(reasoning_content):
                                 thinking_step += 1
+
+                    else:
+                        # -----------------------------------------------------
+                        # PHASE 2 - POST-TOOL: Accumulate reasoning into buffer
+                        # Will be flushed as a discrete reasoning step later
+                        # -----------------------------------------------------
+                        post_tool_buffer += reasoning_content
+                        accumulated_thinking += reasoning_content
+                        print(f"[POST-TOOL BUFFER] Phase 2 Accumulating: {reasoning_content[:80]}..." if len(reasoning_content) > 80 else f"[POST-TOOL BUFFER] Phase 2 Accumulating: {reasoning_content}")
 
                 # ---------------------------------------------------------------
                 # RESPONSE CONTENT (main text content)
@@ -522,7 +565,7 @@ async def a2a_starter(
                     print(f"[RESPONSE] Streaming: {chunk.content[:80]}..." if len(chunk.content) > 80 else f"[RESPONSE] Streaming: {chunk.content}")
 
                     # Categorize content based on position relative to tool calls
-                    if tool_calls_count == 0 and not tools_completed and not reasoning_content:
+                    if tool_calls_count == 0 and not tools_completed and not reasoning_content and thinking_phase == "initial":
                         # THINKING: Before any tool calls = reasoning content
                         # (fallback for models that don't use reasoning_content)
                         accumulated_thinking += chunk.content
@@ -539,6 +582,28 @@ async def a2a_starter(
                             if len(accumulated_thinking) % 200 < len(chunk.content):
                                 thinking_step += 1
                     else:
+                        # ---------------------------------------------------------
+                        # PHASE TRANSITION: Flush buffer when entering final phase
+                        # ---------------------------------------------------------
+                        if thinking_phase != "final":
+                            # Flush any remaining post-tool reasoning
+                            if post_tool_buffer.strip():
+                                step_title = f"Analyzing {last_tool_name} results" if last_tool_name else "Preparing response"
+                                print(f"[PHASE->FINAL] Flushing buffer as step: {step_title}")
+
+                                if is_thinking_enabled:
+                                    yield emit_reasoning_step(
+                                        title=step_title,
+                                        content=post_tool_buffer.strip(),
+                                        step_number=reasoning_step_counter
+                                    )
+                                    reasoning_step_counter += 1
+
+                                post_tool_buffer = ""
+
+                            thinking_phase = "final"
+                            print(f"[PHASE] Transitioning to 'final'")
+
                         # RESPONSE: After tool calls = final response content
                         # CRITICAL: Use emit_response_part() to wrap in AgentMessage
                         yield emit_response_part(chunk.content)
@@ -557,6 +622,32 @@ async def a2a_starter(
                         tool_name_tc = tc.get('name', 'unknown')
                         tool_args_tc = tc.get('args', {})
                         tool_call_id = tc.get('id')
+
+                        # ---------------------------------------------------------
+                        # PHASE TRANSITION: Flush post-tool buffer before new tool
+                        # ---------------------------------------------------------
+                        if thinking_phase == "post_tool" and post_tool_buffer.strip():
+                            # Flush accumulated post-tool reasoning as a discrete step
+                            step_title = f"Analyzing {last_tool_name} results" if last_tool_name else "Processing"
+                            print(f"[PHASE 2->TOOL] Flushing buffer as step: {step_title}")
+
+                            if is_thinking_enabled:
+                                yield emit_reasoning_step(
+                                    title=step_title,
+                                    content=post_tool_buffer.strip(),
+                                    step_number=reasoning_step_counter
+                                )
+                                reasoning_step_counter += 1
+
+                            post_tool_buffer = ""
+
+                        # Transition to post_tool phase after first tool call
+                        if thinking_phase == "initial":
+                            thinking_phase = "post_tool"
+                            print(f"[PHASE] Transitioning from 'initial' to 'post_tool'")
+
+                        # Track last tool name for step titling
+                        last_tool_name = tool_name_tc
 
                         # FIXED: Emit BOTH trajectory metadata AND DataPart
                         # This ensures compatibility with:
@@ -631,6 +722,9 @@ async def a2a_starter(
         print(f"  - Response tokens: {len(accumulated_response)} chars")
         print(f"  - Tool calls: {tool_calls_count}")
         print(f"  - Tools completed: {tools_completed}")
+        print(f"  - Final phase: {thinking_phase}")
+        print(f"  - Reasoning steps emitted: {reasoning_step_counter}")
+        print(f"  - Post-tool buffer remaining: {len(post_tool_buffer)} chars")
         print(f"{'='*60}\n")
 
         # ---------------------------------------------------------------------
