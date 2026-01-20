@@ -548,12 +548,21 @@ async def a2a_starter(
 
                     else:
                         # -----------------------------------------------------
-                        # PHASE 2 - POST-TOOL: Accumulate reasoning into buffer
-                        # Will be flushed as a discrete reasoning step later
+                        # PHASE 2 - POST-TOOL: Stream AND accumulate reasoning
+                        # Stream tokens for live UI feedback while also
+                        # accumulating for batched reasoning steps
                         # -----------------------------------------------------
                         post_tool_buffer += reasoning_content
                         accumulated_thinking += reasoning_content
                         print(f"[POST-TOOL BUFFER] Phase 2 Accumulating: {reasoning_content[:80]}..." if len(reasoning_content) > 80 else f"[POST-TOOL BUFFER] Phase 2 Accumulating: {reasoning_content}")
+
+                        # NEW: Also stream for live UI feedback
+                        if is_thinking_enabled:
+                            yield emit_thinking_part(
+                                content=reasoning_content,
+                                step_number=thinking_step,
+                                title=f"Analyzing {last_tool_name} results" if last_tool_name else "Processing"
+                            )
 
                 # ---------------------------------------------------------------
                 # RESPONSE CONTENT (main text content)
