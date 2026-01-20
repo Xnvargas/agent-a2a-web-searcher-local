@@ -118,9 +118,9 @@ import traceback
 # -----------------------------------------------------------------------------
 STANDALONE_LLM_API_BASE = os.getenv("LLM_API_BASE", "http://192.168.0.58:11434/v1")
 STANDALONE_LLM_API_KEY = os.getenv("LLM_API_KEY", "dummy")
-STANDALONE_LLM_MODEL = os.getenv("LLM_MODEL", "nemotron-3-nano:latest")
+STANDALONE_LLM_MODEL = os.getenv("LLM_MODEL", "qwen3-next:80b-a3b-thinking-q4_K_M")
 # qwen3-next:80b-a3b-thinking-q4_K_M
-
+# nemotron-3-nano:latest
 # =============================================================================
 # SERVER DEFINITION
 # =============================================================================
@@ -328,14 +328,14 @@ async def a2a_starter(
         api_model = llm_config.api_model
         api_key = llm_config.api_key
         api_base = llm_config.api_base
-        yield AgentMessage(text=f"LLM configured via BeeAI platform: {api_model}\n")
+        # yield AgentMessage(text=f"LLM configured via BeeAI platform: {api_model}\n")
     else:
         # Standalone mode - use environment variables
         api_model = STANDALONE_LLM_MODEL
         api_key = STANDALONE_LLM_API_KEY
         api_base = STANDALONE_LLM_API_BASE
         print(f"LLM extension not available - using standalone config: {api_model} @ {api_base}")
-        yield AgentMessage(text=f"LLM configured for standalone mode: {api_model}\n")
+        # yield AgentMessage(text=f"LLM configured for standalone mode: {api_model}\n")
 
     # -------------------------------------------------------------------------
     # Get Tools from Registry
@@ -384,10 +384,10 @@ async def a2a_starter(
     # -------------------------------------------------------------------------
     # Thinking Mode (using value set in Settings Validation above)
     # -------------------------------------------------------------------------
-    if is_thinking_enabled:
-        yield "Thinking mode is enabled - I'll show my reasoning process.\n"
-    else:
-        yield "Thinking mode is disabled - I'll provide direct responses.\n"
+    # if is_thinking_enabled:
+    #     yield "Thinking mode is enabled - I'll show my reasoning process.\n"
+    # else:
+    #     yield "Thinking mode is disabled - I'll provide direct responses.\n"
 
     # -------------------------------------------------------------------------
     # Execute Agent
