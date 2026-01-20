@@ -67,6 +67,7 @@ class A2AContentType:
     TOOL_CALL = "tool_call"
     TOOL_RESULT = "tool_result"
     THINKING = "thinking"
+    REASONING_STEP = "reasoning_step"  # Batched post-tool reasoning steps
     RESPONSE = "response"
     STATUS = "status"
 
@@ -486,6 +487,60 @@ def emit_response_part(content: str):
     except ImportError:
         # Fallback if SDK not available (standalone testing)
         return create_response_text_part(content)
+
+
+def emit_reasoning_step(
+    title: str,
+    content: str,
+    step_number: Optional[int] = None
+):
+    """
+    Emit a complete reasoning step (non-streaming) wrapped in AgentMessage.
+
+    Used for post-tool reasoning that should appear as a discrete
+    collapsible section in the reasoning accordion. Unlike emit_thinking_part()
+    which streams token-by-token, this emits complete reasoning blocks that
+    were accumulated during tool execution phases.
+
+    This enables the UI to show:
+    - Phase 1 (initial thinking): Streamed via emit_thinking_part() -> reasoning.content
+    - Phase 2 (post-tool analysis): Batched via emit_reasoning_step() -> reasoning.steps[]
+    - Phase 3 (final response): Streamed via emit_response_part() -> main response
+
+    Args:
+        title: Step title (e.g., "Analyzing firecrawl_scrape results")
+        content: Full content of this reasoning step
+        step_number: Optional step number for ordering
+
+    Returns:
+        AgentMessage containing the reasoning step TextPart
+
+    Example:
+        >>> yield emit_reasoning_step(
+        ...     title="Analyzing search results",
+        ...     content="The search returned 5 relevant results...",
+        ...     step_number=1
+        ... )
+    """
+    metadata = {
+        "content_type": A2AContentType.REASONING_STEP,
+        "title": title,
+    }
+    if step_number is not None:
+        metadata["step"] = step_number
+
+    try:
+        from agentstack_sdk.a2a.types import AgentMessage
+        if isinstance(TextPart, type) and TextPart != dict:
+            part = TextPart(text=content, metadata=metadata)
+        else:
+            part = {"kind": "text", "text": content, "metadata": metadata}
+        return AgentMessage(parts=[part])
+    except ImportError:
+        # Fallback if SDK not available (standalone testing)
+        if isinstance(TextPart, type) and TextPart != dict:
+            return TextPart(text=content, metadata=metadata)
+        return {"kind": "text", "text": content, "metadata": metadata}
 
 
 def emit_tool_call_part(
