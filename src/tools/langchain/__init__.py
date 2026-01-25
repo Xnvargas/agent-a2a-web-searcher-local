@@ -97,9 +97,6 @@ from .base import LangChainTool
 # Add new services here
 # -----------------------------------------------------------------------------
 
-# SearxNG - Privacy-respecting metasearch
-from . import searx
-
 # Tavily - AI-optimized web search
 from . import tavily
 
@@ -113,4 +110,5 @@ from . import tavily
 
 __all__ = [
     "LangChainTool",
+    "tavily"
 ]

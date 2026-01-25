@@ -31,22 +31,10 @@ To run the BeeAI agent:
 """
 
 # LangGraph Agent
-from .agent import run, a2a_starter 
-
-# BeeAI Framework Agent
-from .bee_agent import (
-    run as bee_run,
-    bee_granite_4_starter,
-    bee_server,
-)
+from .agent import run, Web_Agent
 
 __all__ = [
     # LangGraph Agent
     "run",
-    "granite_4_starter",
-    
-    # BeeAI Framework Agent
-    "bee_run",
-    "bee_granite_4_starter",
-    "bee_server",
+    "Web_Agent"
 ]

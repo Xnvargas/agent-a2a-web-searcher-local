@@ -96,7 +96,6 @@ from .langchain.base import LangChainTool
 from .mcp import firecrawl  # Registers all Firecrawl tools
 
 # LangChain Tools - Import to register
-from .langchain import searx  # Registers SearxNG search tools
 
 # -----------------------------------------------------------------------------
 # Public API

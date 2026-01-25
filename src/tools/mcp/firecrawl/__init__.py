@@ -74,22 +74,12 @@ from tools.registry import ToolRegistry
 
 # Import tool classes (they import FIRECRAWL_MCP_URL from this module)
 from .scrape import FirecrawlScrapeTool
-from .map import FirecrawlMapTool
-from .search import FirecrawlSearchTool
-from .extract import FirecrawlExtractTool
-from .crawl import FirecrawlCrawlTool, FirecrawlCheckCrawlStatusTool
-from .batch import FirecrawlBatchScrapeTool, FirecrawlCheckBatchStatusTool
+
 
 # Register all tools
 # Comment out any tools you don't want to expose to the agent
 ToolRegistry.register(FirecrawlScrapeTool())
-ToolRegistry.register(FirecrawlMapTool())
-ToolRegistry.register(FirecrawlSearchTool())
-ToolRegistry.register(FirecrawlExtractTool())
-ToolRegistry.register(FirecrawlCrawlTool())
-ToolRegistry.register(FirecrawlCheckCrawlStatusTool())
-ToolRegistry.register(FirecrawlBatchScrapeTool())
-ToolRegistry.register(FirecrawlCheckBatchStatusTool())
+
 
 # -----------------------------------------------------------------------------
 # Exports
@@ -101,12 +91,5 @@ __all__ = [
     "FIRECRAWL_SERVER_NAME",
     
     # Tools
-    "FirecrawlScrapeTool",
-    "FirecrawlMapTool",
-    "FirecrawlSearchTool",
-    "FirecrawlExtractTool",
-    "FirecrawlCrawlTool",
-    "FirecrawlCheckCrawlStatusTool",
-    "FirecrawlBatchScrapeTool",
-    "FirecrawlCheckBatchStatusTool",
+    "FirecrawlScrapeTool"
 ]

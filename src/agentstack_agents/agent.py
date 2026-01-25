@@ -118,7 +118,7 @@ import traceback
 # -----------------------------------------------------------------------------
 STANDALONE_LLM_API_BASE = os.getenv("LLM_API_BASE", "http://192.168.0.58:11434/v1")
 STANDALONE_LLM_API_KEY = os.getenv("LLM_API_KEY", "dummy")
-STANDALONE_LLM_MODEL = os.getenv("LLM_MODEL", "qwen3-next:80b-a3b-thinking-q4_K_M")
+STANDALONE_LLM_MODEL = os.getenv("LLM_MODEL", "glm-4.7-flash:q4_K_M")
 # qwen3-next:80b-a3b-thinking-q4_K_M
 # nemotron-3-nano:latest
 # =============================================================================
@@ -156,43 +156,10 @@ server = Server()
                 name="tavily_search",
                 description="Search the web using Tavily AI-optimized search engine. Returns comprehensive, accurate results with snippets optimized for AI agents.",
             ),
-            # SearxNG Search Tool (fallback)
-            AgentDetailTool(
-                name="searx_search",
-                description="Search the web using SearxNG metasearch engine. Returns structured results with titles, snippets, links, and source engines from multiple search engines.",
-            ),
             # Firecrawl Tools
             AgentDetailTool(
                 name="firecrawl_scrape",
                 description="Scrape content from a single URL with advanced options. Returns markdown or HTML content.",
-            ),
-            AgentDetailTool(
-                name="firecrawl_map",
-                description="Map a website to discover all indexed URLs. Best for finding specific sections of a website.",
-            ),
-            AgentDetailTool(
-                name="firecrawl_search",
-                description="Search the web and optionally extract content from search results.",
-            ),
-            AgentDetailTool(
-                name="firecrawl_extract",
-                description="Extract structured information from web pages using LLM capabilities.",
-            ),
-            AgentDetailTool(
-                name="firecrawl_crawl",
-                description="Start an asynchronous crawl job with advanced options.",
-            ),
-            AgentDetailTool(
-                name="firecrawl_check_crawl_status",
-                description="Check the status of a crawl job.",
-            ),
-            AgentDetailTool(
-                name="firecrawl_batch_scrape",
-                description="Scrape multiple URLs efficiently with built-in rate limiting.",
-            ),
-            AgentDetailTool(
-                name="firecrawl_check_batch_status",
-                description="Check the status of a batch scraping operation.",
             ),
             # -----------------------------------------------------------------
             # ADD NEW TOOLS HERE
@@ -210,14 +177,14 @@ server = Server()
         ),
         contributors=[
             AgentDetailContributor(
-                name="Another Person",
+                name="Victoriya Kelyman",
                 email="another@beeai.dev",
                 url="https://beeai.dev",
             ),
         ]
     )
 )
-async def a2a_starter(
+async def Web_Agent(
     input: Message,
     context: RunContext,
     llm: Annotated[
@@ -826,7 +793,7 @@ def run():
     """
     try:
         server.run(
-            host=os.getenv("HOST", "127.0.0.1"),
+            host=os.getenv("HOST", "0.0.0.0"),
             port=int(os.getenv("PORT", 8006))
         )
     except KeyboardInterrupt:

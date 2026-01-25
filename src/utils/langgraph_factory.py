@@ -219,7 +219,7 @@ def create_langgraph_agent(
         temperature=temperature,
         reasoning=True,  # Critical: Captures thinking tokens in additional_kwargs['reasoning_content']
         streaming=True,  # Enable token-level streaming
-        # num_predict=-1,  # Optional: Unlimited token generation
+        num_predict=-1,  # Optional: Unlimited token generation
     )
     
     # -------------------------------------------------------------------------
