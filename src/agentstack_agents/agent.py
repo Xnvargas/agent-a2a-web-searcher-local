@@ -488,47 +488,39 @@ async def Web_Agent(
                     elif thinking_phase == "initial":
                         # -----------------------------------------------------
                         # PHASE 1 - INITIAL THINKING: Pre-tool reasoning
-                        # Stream tokens directly to reasoning.content
+                        # Stream tokens directly to reasoning.content (NO titles)
+                        # Titles create discrete steps; we want continuous streaming
                         # -----------------------------------------------------
                         accumulated_thinking += reasoning_content
                         print(f"[THINKING] Phase 1 Streaming: {reasoning_content[:80]}..." if len(reasoning_content) > 80 else f"[THINKING] Phase 1 Streaming: {reasoning_content}")
 
                         if is_thinking_enabled:
-                            # Determine step title based on content patterns
-                            step_title = "Thinking"
-                            if "analyze" in reasoning_content.lower() or "understand" in reasoning_content.lower():
-                                step_title = "Analyzing Query"
-                            elif "search" in reasoning_content.lower() or "find" in reasoning_content.lower():
-                                step_title = "Planning Search"
-                            elif "result" in reasoning_content.lower() or "found" in reasoning_content.lower():
-                                step_title = "Evaluating Results"
-
+                            # Stream WITHOUT title - this goes to reasoning.content
                             yield emit_thinking_part(
                                 content=reasoning_content,
-                                step_number=thinking_step,
-                                title=step_title
+                                step_number=None,  # No step number for streaming
+                                title=None  # No title - enables content streaming mode
                             )
-
-                            # Increment step counter periodically for better UX grouping
-                            if len(accumulated_thinking) % 200 < len(reasoning_content):
-                                thinking_step += 1
 
                     else:
                         # -----------------------------------------------------
                         # PHASE 2 - POST-TOOL: Stream AND accumulate reasoning
                         # Stream tokens for live UI feedback while also
                         # accumulating for batched reasoning steps
+                        # The batched emit_reasoning_step() calls (with titles) happen
+                        # at phase transitions, not on every token
                         # -----------------------------------------------------
                         post_tool_buffer += reasoning_content
                         accumulated_thinking += reasoning_content
                         print(f"[POST-TOOL BUFFER] Phase 2 Accumulating: {reasoning_content[:80]}..." if len(reasoning_content) > 80 else f"[POST-TOOL BUFFER] Phase 2 Accumulating: {reasoning_content}")
 
-                        # NEW: Also stream for live UI feedback
+                        # Stream WITHOUT title for live UI feedback
+                        # The batched step with title will be emitted at phase transition
                         if is_thinking_enabled:
                             yield emit_thinking_part(
                                 content=reasoning_content,
-                                step_number=thinking_step,
-                                title=f"Analyzing {last_tool_name} results" if last_tool_name else "Processing"
+                                step_number=None,  # No step number for streaming
+                                title=None  # No title - enables content streaming mode
                             )
 
                 # ---------------------------------------------------------------
@@ -546,17 +538,13 @@ async def Web_Agent(
                         # (fallback for models that don't use reasoning_content)
                         accumulated_thinking += chunk.content
 
-                        # Emit thinking trajectory with metadata for frontend
+                        # Emit thinking WITHOUT title for streaming mode
                         if is_thinking_enabled:
-                            # CRITICAL: Use emit_thinking_part() to wrap in AgentMessage
                             yield emit_thinking_part(
                                 content=chunk.content,
-                                step_number=thinking_step
+                                step_number=None,  # No step number for streaming
+                                title=None  # No title - enables content streaming mode
                             )
-
-                            # Increment step periodically
-                            if len(accumulated_thinking) % 200 < len(chunk.content):
-                                thinking_step += 1
                     else:
                         # ---------------------------------------------------------
                         # PHASE TRANSITION: Flush buffer when entering final phase
