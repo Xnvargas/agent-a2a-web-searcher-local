@@ -1,0 +1,136 @@
+"""
+=============================================================================
+GET CURRENT CONTEXT TOOL
+=============================================================================
+
+Returns information about the current page context.
+Useful when user asks "what opportunity is this?" or "tell me about this account".
+
+=============================================================================
+"""
+
+import json
+from typing import Dict, Any
+from langchain_core.tools import tool
+
+from tools.langchain.base import LangChainTool
+from utils.swot_context import SWOTContext
+
+
+class GetCurrentContextTool(LangChainTool):
+    """
+    Get details about the current context the agent is operating in.
+
+    This tool doesn't call any external API - it reads from the context
+    that was passed when the user opened the AI assistant.
+    """
+
+    name = "get_current_context"
+    description = (
+        "Get details about the current context (opportunity, account, or global view). "
+        "Use this when the user asks about 'this opportunity', 'the current account', "
+        "'what am I looking at', or needs information about their current view. "
+        "Returns structured information about the entity being viewed."
+    )
+
+    def get_schema(self) -> Dict[str, Dict[str, Any]]:
+        # No parameters - reads from context
+        return {}
+
+    async def execute(self) -> str:
+        """Get current context information."""
+        ctx = SWOTContext.get_current()
+
+        if not ctx:
+            return json.dumps({
+                "mode": "global",
+                "message": "No specific context. Operating in global mode with access to all data.",
+                "available_actions": [
+                    "Search all documents",
+                    "Find similar solutions",
+                    "Query any account's technology footprint"
+                ]
+            }, indent=2)
+
+        scope = ctx.scope
+        summary = ctx.summary
+
+        # Build response based on scope type
+        result: Dict[str, Any] = {
+            "mode": scope.type,
+            "entity_name": summary.entity_name,
+        }
+
+        if scope.type == 'opportunity':
+            result.update({
+                "opportunity_id": scope.opportunity_id,
+                "account": {
+                    "name": summary.account_name,
+                    "industry": summary.industry,
+                    "id": scope.account_id
+                },
+                "use_case": summary.use_case,
+                "strategy": summary.strategy,
+                "success_criteria": summary.success_criteria,
+                "status": summary.status,
+                "classification": summary.classification,
+                "products": [
+                    {"name": p.get('name'), "is_primary": p.get('isPrimary')}
+                    for p in (summary.products or [])
+                ],
+                "contacts": [
+                    {"name": c.get('name'), "title": c.get('title'), "influence": c.get('influenceLevel')}
+                    for c in (summary.contacts or [])[:5]
+                ],
+                "solution": {
+                    "status": summary.solution_status,
+                    "has_draft": bool(summary.solution_overview)
+                }
+            })
+
+        elif scope.type == 'account':
+            result.update({
+                "account_id": scope.account_id,
+                "industry": summary.industry,
+                "segment": summary.segment,
+                "technology_footprint": [
+                    {"name": t.get('name'), "category": t.get('category')}
+                    for t in (summary.technology_footprint or [])
+                ],
+                "team_members": [
+                    {"name": tm.get('name'), "role": tm.get('role')}
+                    for tm in (summary.team_members or [])[:5]
+                ]
+            })
+
+        elif scope.type == 'solution':
+            result.update({
+                "solution_id": scope.solution_id,
+                "parent_opportunity": {
+                    "id": scope.opportunity_id,
+                    "name": summary.entity_name
+                },
+                "account": summary.account_name,
+                "solution_status": summary.solution_status,
+                "has_overview": bool(summary.solution_overview),
+                "overview_preview": (summary.solution_overview or "")[:300] + "..." if summary.solution_overview and len(summary.solution_overview) > 300 else summary.solution_overview
+            })
+
+        elif scope.type == 'dashboard':
+            result.update({
+                "message": "Viewing dashboard - pipeline overview",
+                "available_actions": [
+                    "Search all documents",
+                    "Find opportunities",
+                    "Query accounts"
+                ]
+            })
+
+        return json.dumps(result, indent=2)
+
+    def get_langchain_tool(self):
+        @tool
+        def get_current_context() -> str:
+            """Get details about the current context (opportunity, account, or global view)."""
+            return "LANGCHAIN_TOOL_PLACEHOLDER"
+        return get_current_context

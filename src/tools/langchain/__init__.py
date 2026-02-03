@@ -100,6 +100,9 @@ from .base import LangChainTool
 # Tavily - AI-optimized web search
 from . import tavily
 
+# SWOT - Solution Workshop & Opportunity Tracker tools
+from . import swot
+
 # -----------------------------------------------------------------------------
 # ADD NEW LANGCHAIN SERVICES HERE:
 # Example:
@@ -110,5 +113,6 @@ from . import tavily
 
 __all__ = [
     "LangChainTool",
-    "tavily"
+    "tavily",
+    "swot",
 ]

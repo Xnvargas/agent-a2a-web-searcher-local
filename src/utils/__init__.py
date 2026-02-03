@@ -171,6 +171,19 @@ from .bee_citations import (
 )
 
 # -----------------------------------------------------------------------------
+# SWOT Context Management
+# -----------------------------------------------------------------------------
+from .swot_context import (
+    SWOTContext,
+    SWOTContextData,
+    SWOTScope,
+    SWOTContextSummary,
+    extract_swot_context,
+)
+
+from .swot_prompt_builder import build_swot_system_prompt
+
+# -----------------------------------------------------------------------------
 # A2A Parts - DataPart helpers for Carbon AI Chat compatibility
 # -----------------------------------------------------------------------------
 from .a2a_parts import (
@@ -283,4 +296,12 @@ __all__ = [
     "format_bee_tool_data_for_logging",
     "print_bee_tool_execution",
     "extract_bee_citations_from_response",
+
+    # SWOT Context Management
+    "SWOTContext",
+    "SWOTContextData",
+    "SWOTScope",
+    "SWOTContextSummary",
+    "extract_swot_context",
+    "build_swot_system_prompt",
 ]

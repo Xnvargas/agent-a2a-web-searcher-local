@@ -96,6 +96,7 @@ from .langchain.base import LangChainTool
 from .mcp import firecrawl  # Registers all Firecrawl tools
 
 # LangChain Tools - Import to register
+from .langchain import swot  # Registers all SWOT tools
 
 # -----------------------------------------------------------------------------
 # Public API
