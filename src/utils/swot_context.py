@@ -9,12 +9,15 @@ scope their queries to the current entity (opportunity, account, etc.).
 USAGE IN AGENT HANDLER:
 -----------------------
 ```python
-from utils.swot_context import SWOTContext, extract_swot_context
+from utils.swot_context import SWOTContext, extract_swot_context_from_message
 
-extensions = context.request.params.get('extensions', {})
-swot_ctx = extract_swot_context(extensions)
+# Extract context from A2A message metadata (frontend passes it here)
+swot_ctx = extract_swot_context_from_message(input)
 SWOTContext.set_current(swot_ctx)
 ```
+
+NOTE: AgentStack doesn't expose params.extensions to agent functions.
+The frontend passes SWOT context in message.metadata['swot-context'].
 
 USAGE IN TOOLS:
 ---------------
@@ -174,6 +177,51 @@ def extract_swot_context(extensions: Optional[Dict[str, Any]]) -> Optional[SWOTC
         summary=summary,
         fetched_at=ctx_data.get('fetchedAt')
     )
+
+
+def extract_swot_context_from_message(message) -> Optional[SWOTContextData]:
+    """
+    Extract SWOTContextData from A2A message metadata.
+
+    The frontend passes SWOT context in message.metadata['swot-context']
+    because AgentStack doesn't expose params.extensions to agent functions.
+
+    Args:
+        message: The A2A Message object (from a2a.types)
+
+    Returns:
+        SWOTContextData if context present in metadata, None otherwise
+
+    Example message structure:
+        Message(
+            role='user',
+            parts=[TextPart(text='...')],
+            metadata={'swot-context': {...}}
+        )
+    """
+    if not message:
+        print("[SWOT Context] No message provided")
+        return None
+
+    # Access metadata attribute - may be None or dict
+    metadata = getattr(message, 'metadata', None)
+    if not metadata:
+        print("[SWOT Context] No metadata in message")
+        return None
+
+    # Look for swot-context key in metadata
+    swot_ctx_data = metadata.get('swot-context')
+    if not swot_ctx_data:
+        print("[SWOT Context] No 'swot-context' key in metadata")
+        print(f"[SWOT Context] Available metadata keys: {list(metadata.keys())}")
+        return None
+
+    print(f"[SWOT Context] Found context in message metadata:")
+    print(f"  - Scope type: {swot_ctx_data.get('scope', {}).get('type', 'unknown')}")
+    print(f"  - Entity: {swot_ctx_data.get('summary', {}).get('entityName', 'None')}")
+
+    # Reuse existing extraction logic by wrapping in expected format
+    return extract_swot_context({'context': swot_ctx_data})
 
 
 # =============================================================================

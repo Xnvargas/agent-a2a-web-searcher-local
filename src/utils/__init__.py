@@ -179,6 +179,7 @@ from .swot_context import (
     SWOTScope,
     SWOTContextSummary,
     extract_swot_context,
+    extract_swot_context_from_message,
 )
 
 from .swot_prompt_builder import build_swot_system_prompt
@@ -303,5 +304,6 @@ __all__ = [
     "SWOTScope",
     "SWOTContextSummary",
     "extract_swot_context",
+    "extract_swot_context_from_message",
     "build_swot_system_prompt",
 ]
