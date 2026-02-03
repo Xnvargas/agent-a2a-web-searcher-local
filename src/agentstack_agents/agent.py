@@ -109,6 +109,8 @@ from utils.error_extension import (
     create_tool_error_metadata,
 )
 from utils.extension_uris import ExtensionURIs
+from utils.swot_context import SWOTContext, extract_swot_context
+from utils.swot_prompt_builder import build_swot_system_prompt
 from tools import get_all_tools, get_tool_by_name, ToolRegistry
 from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk
 import traceback
@@ -162,13 +164,36 @@ server = Server()
                 description="Scrape content from a single URL with advanced options. Returns markdown or HTML content.",
             ),
             # -----------------------------------------------------------------
-            # ADD NEW TOOLS HERE
-            # Example:
-            # AgentDetailTool(
-            #     name="my_new_tool",
-            #     description="Description of what the tool does.",
-            # ),
+            # SWOT Tools - Solution Workshop & Opportunity Tracker
             # -----------------------------------------------------------------
+            AgentDetailTool(
+                name="search_documents",
+                description="Search documents semantically. Automatically filters to current context unless override_scope=True.",
+            ),
+            AgentDetailTool(
+                name="find_similar_solutions",
+                description="Find past solutions similar to a use case description. Uses current opportunity's use case if not provided.",
+            ),
+            AgentDetailTool(
+                name="get_current_context",
+                description="Get details about the current context (opportunity, account, or global view).",
+            ),
+            AgentDetailTool(
+                name="get_technology_footprint",
+                description="Get IBM technology products deployed at an account.",
+            ),
+            AgentDetailTool(
+                name="query_coverage",
+                description="Find team members who cover a specific product for an account.",
+            ),
+            AgentDetailTool(
+                name="create_solution_draft",
+                description="Create a new solution architecture draft linked to an opportunity.",
+            ),
+            AgentDetailTool(
+                name="create_document_artifact",
+                description="Create a document artifact and optionally link to the current entity.",
+            ),
         ],
         author=AgentDetailContributor(
             name="Xavier Vargas",
@@ -233,6 +258,31 @@ async def Web_Agent(
         3. Filter tools: Pass specific tools list instead of get_all_tools()
     """
     print("AGENT STARTING!")
+
+    # -------------------------------------------------------------------------
+    # Extract SWOT Context from A2A Extensions
+    # -------------------------------------------------------------------------
+    extensions = context.request.params.get('extensions', {}) if hasattr(context, 'request') and context.request and hasattr(context.request, 'params') else {}
+    swot_ctx = extract_swot_context(extensions)
+
+    # Set context for tools (async-safe via ContextVar)
+    SWOTContext.set_current(swot_ctx)
+
+    if swot_ctx:
+        yield trajectory.trajectory_metadata(
+            title="SWOT Context Loaded",
+            content=(
+                f"Scope: {swot_ctx.scope.type}\n"
+                f"Entity: {swot_ctx.summary.entity_name or 'None'}\n"
+                f"Account: {swot_ctx.summary.account_name or 'None'}\n"
+                f"Opportunity ID: {swot_ctx.scope.opportunity_id or 'None'}"
+            )
+        )
+    else:
+        yield trajectory.trajectory_metadata(
+            title="SWOT Context",
+            content="No context provided - operating in global mode"
+        )
 
     # -------------------------------------------------------------------------
     # Settings Validation (Graceful for standalone mode)
@@ -335,16 +385,26 @@ async def Web_Agent(
     #
     # EXTENSION POINT: Agent Configuration
     # You can customize the agent by passing additional parameters:
-    # - system_prompt: Custom system prompt
+    # - system_prompt: Custom system prompt (now built dynamically from SWOT context)
     # - temperature: LLM temperature
     # -------------------------------------------------------------------------
+
+    # Build dynamic system prompt based on SWOT context
+    system_prompt = build_swot_system_prompt(swot_ctx)
+
+    yield trajectory.trajectory_metadata(
+        title="System Prompt Built",
+        content=f"Mode: {swot_ctx.scope.type if swot_ctx else 'global'}"
+    )
+
+    # Create LangGraph Agent with context-aware prompt
+    # SWOT tools are auto-registered via ToolRegistry
     agent = create_langgraph_agent(
         api_model=api_model,
         api_key=api_key,
         api_base=api_base,
-        tools=tools,
-        # Uncomment to customize:
-        # system_prompt="You are a specialized research assistant.",
+        tools=tools,  # Includes SWOT tools automatically
+        system_prompt=system_prompt,  # Dynamic prompt based on context
         # temperature=0.1,
     )
 
@@ -727,6 +787,9 @@ async def Web_Agent(
             content=f"Total tool calls: {tool_calls_count}\nCitations generated: {len(tool_citations)}\nResponse length: {len(final_response)} chars"
         )
 
+        # Clear SWOT context at end of request
+        SWOTContext.clear()
+
     except Exception as e:
         # -------------------------------------------------------------------------
         # Structured Error Handling via A2A Error Extension
@@ -765,6 +828,9 @@ async def Web_Agent(
         # Store partial response if any
         if accumulated_response:
             await context.store(AgentMessage(text=accumulated_response))
+
+        # Clear SWOT context even on error
+        SWOTContext.clear()
 
 
 # =============================================================================
