@@ -8,19 +8,19 @@ services:
     image: agentstack-agent:latest
     container_name: agentstack-agent
     ports:
-      - "8005:8005"
+      - "8006:8006"
     environment:
       # Server configuration
       - HOST=0.0.0.0
-      - PORT=8005
+      - PORT=8006
       # LLM configuration (standalone mode)
       - LLM_API_BASE=http://192.168.0.58:11434/v1
       - LLM_API_KEY=dummy
-      - LLM_MODEL=qwen3-next:80b-a3b-thinking-q4_K_M
+      - LLM_MODEL=glm-4.7-flash:q4_K_M
     restart: unless-stopped
     # Optional: health check
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
       interval: 30s
       timeout: 10s
       retries: 3
