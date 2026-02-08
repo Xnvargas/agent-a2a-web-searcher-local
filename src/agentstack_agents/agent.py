@@ -109,7 +109,7 @@ from utils.error_extension import (
     create_tool_error_metadata,
 )
 from utils.extension_uris import ExtensionURIs
-from utils.swot_context import SWOTContext, extract_swot_context
+from utils.swot_context import SWOTContext, extract_swot_context_from_message
 from utils.swot_prompt_builder import build_swot_system_prompt
 from tools import get_all_tools, get_tool_by_name, ToolRegistry
 from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk
@@ -260,12 +260,19 @@ async def Web_Agent(
     print("AGENT STARTING!")
 
     # -------------------------------------------------------------------------
-    # Extract SWOT Context from A2A Extensions
+    # Extract SWOT Context from Message Metadata
     # -------------------------------------------------------------------------
-    # extensions = context.request.params.get('extensions', {}) if hasattr(context, 'request') and context.request and hasattr(context.request, 'params') else {}
-    # swot_ctx = extract_swot_context(extensions)
-    from utils.swot_context import extract_swot_context_from_message
+    # NOTE: AgentStack doesn't expose params.extensions to agent functions.
+    # The frontend passes SWOT context in message.metadata['swot-context'].
+    #
+    # Previous approach (BROKEN):
+    #   extensions = context.request.params.get('extensions', {})
+    #   swot_ctx = extract_swot_context(extensions)
+    #
+    # New approach (WORKS):
+    #   Extract directly from input message metadata
     swot_ctx = extract_swot_context_from_message(input)
+
     # Set context for tools (async-safe via ContextVar)
     SWOTContext.set_current(swot_ctx)
 
