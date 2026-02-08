@@ -262,9 +262,10 @@ async def Web_Agent(
     # -------------------------------------------------------------------------
     # Extract SWOT Context from A2A Extensions
     # -------------------------------------------------------------------------
-    extensions = context.request.params.get('extensions', {}) if hasattr(context, 'request') and context.request and hasattr(context.request, 'params') else {}
-    swot_ctx = extract_swot_context(extensions)
-
+    # extensions = context.request.params.get('extensions', {}) if hasattr(context, 'request') and context.request and hasattr(context.request, 'params') else {}
+    # swot_ctx = extract_swot_context(extensions)
+    from utils.swot_context import extract_swot_context_from_message
+    swot_ctx = extract_swot_context_from_message(input)
     # Set context for tools (async-safe via ContextVar)
     SWOTContext.set_current(swot_ctx)
 

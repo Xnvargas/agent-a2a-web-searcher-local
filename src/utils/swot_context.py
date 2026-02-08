@@ -175,7 +175,32 @@ def extract_swot_context(extensions: Optional[Dict[str, Any]]) -> Optional[SWOTC
         fetched_at=ctx_data.get('fetchedAt')
     )
 
-
+def extract_swot_context_from_message(message: Any) -> Optional[SWOTContextData]:
+    """
+    Extract SWOTContextData from A2A message metadata.
+    
+    The a2a-carbon-chat-adapter places context in message.metadata['swot-context'].
+    
+    Args:
+        message: The A2A Message object (input to agent)
+        
+    Returns:
+        SWOTContextData if context present, None otherwise
+    """
+    if not hasattr(message, 'metadata') or not message.metadata:
+        print("[SWOT Context] No metadata in message")
+        return None
+    
+    # The adapter uses 'swot-context' as the key
+    ctx_data = message.metadata.get('swot-context')
+    if not ctx_data:
+        print("[SWOT Context] No 'swot-context' key in metadata")
+        return None
+    
+    print(f"[SWOT Context] Found context in metadata: {ctx_data.get('scope', {}).get('type', 'unknown')}")
+    
+    # Reuse existing parsing logic by wrapping in expected structure
+    return extract_swot_context({'context': ctx_data})
 # =============================================================================
 # CONTEXT MANAGER (Thread/Async Safe via ContextVar)
 # =============================================================================
