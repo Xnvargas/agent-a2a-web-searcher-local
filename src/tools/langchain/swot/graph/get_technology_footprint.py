@@ -4,25 +4,25 @@ GET TECHNOLOGY FOOTPRINT TOOL
 =============================================================================
 
 Get IBM technology products deployed at an account.
-Uses current context's account if not specified.
+Migrated from httpx HTTP proxy to direct AGEGraph Cypher queries.
 
 =============================================================================
 """
 
-import os
-import httpx
 from typing import Dict, Any, Optional
 from langchain_core.tools import tool
 
 from tools.langchain.base import LangChainTool
 from utils.swot_context import SWOTContext
+from utils.db.graph import run_cypher
 
 
 class GetTechnologyFootprintTool(LangChainTool):
     """
-    Get IBM technology deployed at an account.
+    Get IBM technology deployed at an account via AGEGraph.
 
     Useful for understanding existing installations before proposing solutions.
+    AGEGraph handles LOAD 'age', search_path, Cypher→SQL, and agtype parsing.
     """
 
     name = "get_technology_footprint"
@@ -32,9 +32,6 @@ class GetTechnologyFootprintTool(LangChainTool):
         "Returns list of products with categories. Use this to understand "
         "what IBM technology a client already has before proposing solutions."
     )
-
-    api_base_url: str = os.getenv("SWOT_API_BASE", "http://localhost:3000")
-    timeout: float = 30.0
 
     def get_schema(self) -> Dict[str, Dict[str, Any]]:
         return {
@@ -46,39 +43,41 @@ class GetTechnologyFootprintTool(LangChainTool):
         }
 
     async def execute(self, account_id: Optional[str] = None) -> str:
-        """Get technology footprint for an account."""
+        """Get technology footprint via direct AGEGraph Cypher query."""
         try:
-            # Resolve account ID
-            target_account = account_id
-            if not target_account:
-                target_account = SWOTContext.get_account_id()
-
-            if not target_account:
+            target = account_id or SWOTContext.get_account_id()
+            if not target:
                 return (
                     "No account_id provided and none available in current context. "
                     "Please specify an account_id or navigate to an account/opportunity page."
                 )
 
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(
-                    f"{self.api_base_url}/api/accounts/{target_account}/footprint"
-                )
-                response.raise_for_status()
-                data = response.json()
+            # Direct Cypher query via AGEGraph
+            results = run_cypher(f"""
+                MATCH (a:Account {{id: '{target}'}})-[:USES_TECHNOLOGY]->(p:Product)
+                RETURN p.name AS name, p.category AS category, p.vendor AS vendor
+            """)
 
-            products = data.get('products', [])
-            account_name = data.get('account_name', 'Unknown')
-
-            if not products:
+            if not results:
+                # Try to get account name from context
+                ctx = SWOTContext.get_current()
+                account_name = ctx.summary.account_name if ctx else "this account"
                 return f"No IBM technology products found deployed at {account_name}."
 
             # Group by category
             by_category: Dict[str, list] = {}
-            for p in products:
-                cat = p.get('category', 'Other')
+            for r in results:
+                cat = r.get('category', 'Other') or 'Other'
                 if cat not in by_category:
                     by_category[cat] = []
-                by_category[cat].append(p.get('name', 'Unknown'))
+                name = r.get('name', 'Unknown')
+                vendor = r.get('vendor')
+                entry = f"{name}" + (f" ({vendor})" if vendor else "")
+                by_category[cat].append(entry)
+
+            # Get account name from context
+            ctx = SWOTContext.get_current()
+            account_name = ctx.summary.account_name if ctx else target
 
             # Format output
             lines = [f"IBM Technology at **{account_name}**:\n"]
@@ -87,14 +86,10 @@ class GetTechnologyFootprintTool(LangChainTool):
                 for prod in prods:
                     lines.append(f"  - {prod}")
 
-            lines.append(f"\nTotal: {len(products)} products")
+            lines.append(f"\nTotal: {len(results)} products")
 
             return '\n'.join(lines)
 
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 404:
-                return "Account not found."
-            return f"API error: {e.response.status_code}"
         except Exception as e:
             return f"Error fetching technology footprint: {str(e)}"
 

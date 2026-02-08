@@ -4,18 +4,19 @@ FIND SIMILAR SOLUTIONS TOOL
 =============================================================================
 
 Find past solutions similar to a use case description.
-Useful for finding reference architectures and patterns.
+Migrated from httpx HTTP proxy to direct DB access via LangChain:
+- OllamaEmbeddings for query vector generation
+- SQLDatabase for calling find_similar_solutions() PostgreSQL function
 
 =============================================================================
 """
 
-import os
-import httpx
 from typing import Dict, Any, Optional
 from langchain_core.tools import tool
 
 from tools.langchain.base import LangChainTool
 from utils.swot_context import SWOTContext
+from utils.db.vector_search import find_similar_solutions as db_similar
 
 
 class FindSimilarSolutionsTool(LangChainTool):
@@ -36,9 +37,6 @@ class FindSimilarSolutionsTool(LangChainTool):
         "architectures and patterns from past work."
     )
 
-    api_base_url: str = os.getenv("SWOT_API_BASE", "http://localhost:3000")
-    timeout: float = 30.0
-
     def get_schema(self) -> Dict[str, Dict[str, Any]]:
         return {
             "use_case": {
@@ -58,7 +56,7 @@ class FindSimilarSolutionsTool(LangChainTool):
         }
 
     async def execute(self, use_case: Optional[str] = None, limit: int = 5) -> str:
-        """Find similar solutions based on use case."""
+        """Find similar solutions based on use case via direct DB access."""
         try:
             limit = max(1, min(10, limit))
 
@@ -75,52 +73,24 @@ class FindSimilarSolutionsTool(LangChainTool):
                         "Please provide a use case description to search for."
                     )
 
-            # Build request
-            payload: Dict[str, Any] = {
-                "useCase": search_text,
-                "limit": limit
-            }
+            # Direct DB call: OllamaEmbeddings → find_similar_solutions() SQL function
+            exclude_opp = ctx.scope.opportunity_id if ctx else None
 
-            # Exclude current opportunity from results
-            if ctx and ctx.scope.opportunity_id:
-                payload["excludeOpportunityId"] = ctx.scope.opportunity_id
+            result = await db_similar(
+                use_case_text=search_text,
+                limit=limit,
+                exclude_opportunity_id=exclude_opp,
+            )
 
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self.api_base_url}/api/solutions/similar",
-                    json=payload
-                )
-                response.raise_for_status()
-                data = response.json()
-
-            results = data.get('results', [])
-
-            if not results:
+            if not result or result.strip() == '' or result.strip() == '[]':
                 return "No similar solutions found. This might be a novel use case."
 
-            # Format results
-            formatted = []
-            for i, r in enumerate(results, 1):
-                opp_name = r.get('opportunity_name', 'Unknown')
-                account = r.get('account_name', 'Unknown account')
-                similarity = r.get('similarity', 0)
-                use_case_preview = (r.get('use_case') or 'N/A')[:200]
-                solution_preview = (r.get('solution_overview') or 'No solution details')[:150]
-
-                formatted.append(
-                    f"{i}. **{opp_name}** at {account} (similarity: {similarity:.0%})\n"
-                    f"   Use case: {use_case_preview}{'...' if len(r.get('use_case', '')) > 200 else ''}\n"
-                    f"   Solution: {solution_preview}{'...' if len(r.get('solution_overview', '')) > 150 else ''}"
-                )
-
-            header = f"Found {len(results)} similar solutions"
+            header = "Similar solutions found"
             if ctx and ctx.scope.opportunity_id:
                 header += " (excluding current opportunity)"
 
-            return header + ":\n\n" + "\n\n".join(formatted)
+            return header + ":\n\n" + result
 
-        except httpx.HTTPStatusError as e:
-            return f"API error: {e.response.status_code}"
         except Exception as e:
             return f"Error finding similar solutions: {str(e)}"
 

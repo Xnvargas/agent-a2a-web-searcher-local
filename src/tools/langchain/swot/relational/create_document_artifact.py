@@ -4,26 +4,26 @@ CREATE DOCUMENT ARTIFACT TOOL
 =============================================================================
 
 Create agent-generated documents and link to current entity.
-Documents are stored in MinIO and processed for embedding.
+Migrated from httpx HTTP proxy to direct SQLDatabase INSERT + MinIO SDK.
 
 =============================================================================
 """
 
-import os
-import httpx
+import uuid
 from typing import Dict, Any, Optional
 from langchain_core.tools import tool
 
 from tools.langchain.base import LangChainTool
 from utils.swot_context import SWOTContext
+from utils.db.sql import run_query
+from utils.storage.minio_client import upload_to_minio
 
 
 class CreateDocumentArtifactTool(LangChainTool):
     """
     Create a document artifact (generated content) and link to current entity.
 
-    Use this to save analyses, summaries, proposals, or any generated content
-    that should be searchable and linked to the business context.
+    Uses SQLDatabase for record creation and MinIO SDK for file storage.
     """
 
     name = "create_document_artifact"
@@ -32,9 +32,6 @@ class CreateDocumentArtifactTool(LangChainTool):
         "link to the current entity. Documents are saved and become searchable. "
         "Use this to save generated content for future reference. Supports markdown."
     )
-
-    api_base_url: str = os.getenv("SWOT_API_BASE", "http://localhost:3000")
-    timeout: float = 30.0
 
     def get_schema(self) -> Dict[str, Dict[str, Any]]:
         return {
@@ -69,7 +66,7 @@ class CreateDocumentArtifactTool(LangChainTool):
         category: str = "agent-artifact",
         link_to_current: bool = True
     ) -> str:
-        """Create a document artifact."""
+        """Create a document artifact via SQLDatabase + MinIO."""
         try:
             # Validate inputs
             if not title or len(title.strip()) < 3:
@@ -77,36 +74,49 @@ class CreateDocumentArtifactTool(LangChainTool):
             if not content or len(content.strip()) < 10:
                 return "Please provide meaningful content (at least 10 characters)."
 
-            # Build request
-            payload: Dict[str, Any] = {
-                "title": title.strip(),
-                "content": content.strip(),
-                "category": category,
-                "mimeType": "text/markdown"
-            }
+            doc_id = str(uuid.uuid4())
+            safe_title = title.strip().replace("'", "''")
+            safe_category = category.replace("'", "''")
+            filename = f"{title.strip()}.md"
+            safe_filename = filename.replace("'", "''")
+            minio_path = f"artifacts/{doc_id}/{filename}"
 
-            # Link to current context if requested
+            # 1. Store content in MinIO
+            await upload_to_minio(minio_path, content.encode('utf-8'), "text/markdown")
+
+            # 2. Create document record via LangChain SQLDatabase
+            safe_minio_path = minio_path.replace("'", "''")
+            run_query(f"""
+                INSERT INTO documents (id, title, filename, file_path, mime_type,
+                    file_size_bytes, category, status, source)
+                VALUES ('{doc_id}'::uuid, '{safe_title}', '{safe_filename}', '{safe_minio_path}',
+                    'text/markdown', {len(content)}, '{safe_category}', 'uploaded', 'agent')
+            """)
+
+            # 3. Link to current entity
             linked_entities = []
             if link_to_current:
                 ctx = SWOTContext.get_current()
                 if ctx:
                     scope = ctx.scope
                     if scope.opportunity_id:
-                        payload['opportunityId'] = scope.opportunity_id
-                        linked_entities.append(f"opportunity ({ctx.summary.entity_name or scope.opportunity_id})")
+                        run_query(f"""
+                            INSERT INTO document_opportunities (document_id, opportunity_id)
+                            VALUES ('{doc_id}'::uuid, '{scope.opportunity_id}'::uuid)
+                            ON CONFLICT DO NOTHING
+                        """)
+                        linked_entities.append(
+                            f"opportunity ({ctx.summary.entity_name or scope.opportunity_id})"
+                        )
                     if scope.account_id:
-                        payload['accountId'] = scope.account_id
-                        linked_entities.append(f"account ({ctx.summary.account_name or scope.account_id})")
-
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self.api_base_url}/api/documents/artifacts",
-                    json=payload
-                )
-                response.raise_for_status()
-                data = response.json()
-
-            doc_id = data.get('id', 'unknown')
+                        run_query(f"""
+                            INSERT INTO document_accounts (document_id, account_id)
+                            VALUES ('{doc_id}'::uuid, '{scope.account_id}'::uuid)
+                            ON CONFLICT DO NOTHING
+                        """)
+                        linked_entities.append(
+                            f"account ({ctx.summary.account_name or scope.account_id})"
+                        )
 
             # Build confirmation message
             result = [
@@ -125,8 +135,6 @@ class CreateDocumentArtifactTool(LangChainTool):
 
             return '\n'.join(result)
 
-        except httpx.HTTPStatusError as e:
-            return f"API error: {e.response.status_code} - {e.response.text}"
         except Exception as e:
             return f"Error creating document: {str(e)}"
 
