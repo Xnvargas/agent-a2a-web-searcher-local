@@ -4,27 +4,26 @@ QUERY COVERAGE TOOL
 =============================================================================
 
 Find team members who cover a specific product for an account.
-Uses Apache AGE graph traversal in the backend.
+Migrated from httpx HTTP proxy to direct AGEGraph Cypher queries.
 
 =============================================================================
 """
 
-import os
-import httpx
 from typing import Dict, Any, Optional
 from langchain_core.tools import tool
 
 from tools.langchain.base import LangChainTool
 from utils.swot_context import SWOTContext
+from utils.db.graph import run_cypher
 
 
 class QueryCoverageTool(LangChainTool):
     """
-    Find who covers a specific product for an account.
+    Find who covers a specific product for an account via AGEGraph.
 
     Uses graph relationships to find team members with both:
-    - Expertise in the product
-    - Coverage of the account
+    - Expertise in the product (HAS_EXPERTISE)
+    - Coverage of the account (COVERS)
     """
 
     name = "query_coverage"
@@ -34,9 +33,6 @@ class QueryCoverageTool(LangChainTool):
         "Account defaults to current context if not specified. "
         "Use this to find the right people to involve in an opportunity."
     )
-
-    api_base_url: str = os.getenv("SWOT_API_BASE", "http://localhost:3000")
-    timeout: float = 30.0
 
     def get_schema(self) -> Dict[str, Dict[str, Any]]:
         return {
@@ -57,33 +53,27 @@ class QueryCoverageTool(LangChainTool):
         product_name: str,
         account_id: Optional[str] = None
     ) -> str:
-        """Query coverage for a product at an account."""
+        """Query coverage via direct AGEGraph Cypher query."""
         try:
-            # Resolve account ID
-            target_account = account_id
-            if not target_account:
-                target_account = SWOTContext.get_account_id()
-
-            if not target_account:
+            target = account_id or SWOTContext.get_account_id()
+            if not target:
                 return (
                     "No account_id provided and none available in current context. "
                     "Please specify an account_id or navigate to an account/opportunity page."
                 )
 
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(
-                    f"{self.api_base_url}/api/coverage",
-                    params={
-                        "productName": product_name,
-                        "accountId": target_account
-                    }
-                )
-                response.raise_for_status()
-                data = response.json()
+            sanitized_name = product_name.replace("'", "\\'")
 
-            coverage = data.get('coverage', [])
+            # Direct Cypher query via AGEGraph
+            results = run_cypher(f"""
+                MATCH (tm:TeamMember)-[:HAS_EXPERTISE]->(p:Product)
+                WHERE p.name = '{sanitized_name}'
+                MATCH (tm)-[:COVERS]->(a:Account)
+                WHERE a.id = '{target}'
+                RETURN tm.id AS id, tm.name AS name, tm.role AS role, tm.email AS email
+            """)
 
-            if not coverage:
+            if not results:
                 return (
                     f"No team members found covering **{product_name}** for this account. "
                     f"This could mean:\n"
@@ -94,15 +84,17 @@ class QueryCoverageTool(LangChainTool):
 
             # Format results
             lines = [f"Team members covering **{product_name}** for this account:\n"]
-            for c in coverage:
-                name = c.get('name', 'Unknown')
-                role = c.get('role', 'Unknown role')
-                lines.append(f"- **{name}** - {role}")
+            for r in results:
+                name = r.get('name', 'Unknown')
+                role = r.get('role', 'Unknown role')
+                email = r.get('email')
+                line = f"- **{name}** - {role}"
+                if email:
+                    line += f" ({email})"
+                lines.append(line)
 
             return '\n'.join(lines)
 
-        except httpx.HTTPStatusError as e:
-            return f"API error: {e.response.status_code}"
         except Exception as e:
             return f"Error querying coverage: {str(e)}"
 

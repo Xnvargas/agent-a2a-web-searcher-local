@@ -10,11 +10,14 @@ dependencies = [
     "agentstack-sdk>=0.4.0",
     "langchain[openai]>=0.3.27",
     "langchain-community>=0.3.0",
-    "langchain-ollama>=0.3.0",  # ChatOllama with reasoning=True support
+    "langchain-ollama>=0.3.0",  # ChatOllama + OllamaEmbeddings
+    "langchain-postgres>=0.0.14",  # PGVectorStore (future use)
     "langgraph>=0.6.10",
     "pyyaml>=6.0.2",
     "httpx>=0.27.0",
     "tavily-python>=0.5.0",  # Tavily AI-optimized web search
+    "psycopg2-binary>=2.9.0",  # Required by AGEGraph + SQLDatabase
+    "minio>=7.2.0",  # MinIO SDK for document artifact storage
     # BeeAI Framework for bee_agent.py
     "beeai-framework[a2a]>=0.1.0",
 ]
