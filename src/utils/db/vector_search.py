@@ -7,7 +7,8 @@ Combines AgentEmbedder (ollama SDK) for query vector generation with
 SQLDatabase.run() to call our existing PostgreSQL search functions.
 
 Uses the existing search_documents() and find_similar_solutions() SQL
-functions that encapsulate the complex entity-scoped filtering logic.
+functions in the ag_catalog schema that encapsulate the complex
+entity-scoped filtering logic.
 
 =============================================================================
 """
@@ -30,7 +31,7 @@ async def search_documents(
     Semantic document search using pgvector.
 
     1. Generates embedding via AgentEmbedder (ollama SDK)
-    2. Calls search_documents() PostgreSQL function via LangChain SQLDatabase
+    2. Calls ag_catalog.search_documents() PostgreSQL function via LangChain SQLDatabase
 
     This reuses the same SQL function the Next.js API calls,
     just without the HTTP proxy hop.
@@ -38,20 +39,20 @@ async def search_documents(
     embedding = await generate_embedding(query_text)
     embedding_str = f"'[{','.join(str(x) for x in embedding)}]'::vector"
 
-    # Build parameter expressions for SQL
-    acc = f"'{account_id}'::uuid" if account_id else "NULL"
-    opp = f"'{opportunity_id}'::uuid" if opportunity_id else "NULL"
-    sol = f"'{solution_id}'::uuid" if solution_id else "NULL"
-    con = f"'{contact_id}'::uuid" if contact_id else "NULL"
+    # Build parameter expressions with explicit type casts
+    acc = f"'{account_id}'::uuid" if account_id else "NULL::uuid"
+    opp = f"'{opportunity_id}'::uuid" if opportunity_id else "NULL::uuid"
+    sol = f"'{solution_id}'::uuid" if solution_id else "NULL::uuid"
+    con = f"'{contact_id}'::uuid" if contact_id else "NULL::uuid"
 
     if product_ids:
         pids = ",".join(f"'{p}'::uuid" for p in product_ids)
-        prod = f"ARRAY[{pids}]"
+        prod = f"ARRAY[{pids}]::uuid[]"
     else:
-        prod = "NULL"
+        prod = "NULL::uuid[]"
 
     sql = f"""
-        SELECT * FROM search_documents(
+        SELECT * FROM ag_catalog.search_documents(
             {embedding_str}, {acc}, {opp}, {sol}, {con}, {prod}, {limit}, {threshold}
         )
     """
@@ -69,15 +70,15 @@ async def find_similar_solutions(
     Find solutions similar to a use case description.
 
     1. Generates embedding via AgentEmbedder (ollama SDK)
-    2. Calls find_similar_solutions() PostgreSQL function via LangChain SQLDatabase
+    2. Calls ag_catalog.find_similar_solutions() PostgreSQL function via LangChain SQLDatabase
     """
     embedding = await generate_embedding(use_case_text)
     embedding_str = f"'[{','.join(str(x) for x in embedding)}]'::vector"
 
-    exclude = f"'{exclude_opportunity_id}'::uuid" if exclude_opportunity_id else "NULL"
+    exclude = f"'{exclude_opportunity_id}'::uuid" if exclude_opportunity_id else "NULL::uuid"
 
     sql = f"""
-        SELECT * FROM find_similar_solutions(
+        SELECT * FROM ag_catalog.find_similar_solutions(
             {embedding_str}, {limit}, {min_similarity}, {exclude}
         )
     """
