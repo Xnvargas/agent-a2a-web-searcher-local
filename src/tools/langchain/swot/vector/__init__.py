@@ -1,3 +1,3 @@
 """
-Vector search tools — LangChain OllamaEmbeddings + SQLDatabase
+Vector search tools — AgentEmbedder (ollama SDK) + SQLDatabase
 """

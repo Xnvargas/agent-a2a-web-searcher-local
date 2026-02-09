@@ -14,7 +14,7 @@ TOOLS (10 total):
 Context:
 - get_current_context: Get details about current page context
 
-Vector (OllamaEmbeddings + SQLDatabase):
+Vector (AgentEmbedder + SQLDatabase):
 - search_documents: Semantic document search with entity filtering
 - find_similar_solutions: Find past solutions matching a use case
 
@@ -37,7 +37,7 @@ from tools.registry import ToolRegistry
 # Context tools (no external calls — reads SWOTContext)
 from .context.get_current_context import GetCurrentContextTool
 
-# Vector tools (OllamaEmbeddings + SQLDatabase → pgvector)
+# Vector tools (AgentEmbedder + SQLDatabase → pgvector)
 from .vector.search_documents import SearchDocumentsTool
 from .vector.find_similar_solutions import FindSimilarSolutionsTool
 
