@@ -4,8 +4,8 @@ SEARCH DOCUMENTS TOOL
 =============================================================================
 
 Semantic document search with automatic entity scoping.
-Migrated from httpx HTTP proxy to direct DB access via LangChain:
-- OllamaEmbeddings for query vector generation
+Migrated from httpx HTTP proxy to direct DB access:
+- AgentEmbedder (ollama SDK) for query vector generation
 - SQLDatabase for calling search_documents() PostgreSQL function
 
 =============================================================================
@@ -23,7 +23,7 @@ class SearchDocumentsTool(LangChainTool):
     """
     Semantic document search with automatic entity filtering.
 
-    Uses OllamaEmbeddings + pgvector search_documents() SQL function directly.
+    Uses AgentEmbedder + pgvector search_documents() SQL function directly.
     Automatically applies scope filters (opportunityId, accountId) unless
     override_scope=True.
     """
@@ -76,7 +76,7 @@ class SearchDocumentsTool(LangChainTool):
                 if filters:
                     scope_applied = True
 
-            # Direct DB call: OllamaEmbeddings → search_documents() SQL function
+            # Direct DB call: AgentEmbedder → search_documents() SQL function
             result = await db_search(
                 query_text=query,
                 account_id=filters.get('accountId'),

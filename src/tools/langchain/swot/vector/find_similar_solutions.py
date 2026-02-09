@@ -4,8 +4,8 @@ FIND SIMILAR SOLUTIONS TOOL
 =============================================================================
 
 Find past solutions similar to a use case description.
-Migrated from httpx HTTP proxy to direct DB access via LangChain:
-- OllamaEmbeddings for query vector generation
+Migrated from httpx HTTP proxy to direct DB access:
+- AgentEmbedder (ollama SDK) for query vector generation
 - SQLDatabase for calling find_similar_solutions() PostgreSQL function
 
 =============================================================================
@@ -73,7 +73,7 @@ class FindSimilarSolutionsTool(LangChainTool):
                         "Please provide a use case description to search for."
                     )
 
-            # Direct DB call: OllamaEmbeddings → find_similar_solutions() SQL function
+            # Direct DB call: AgentEmbedder → find_similar_solutions() SQL function
             exclude_opp = ctx.scope.opportunity_id if ctx else None
 
             result = await db_similar(

@@ -1,9 +1,9 @@
 """
 =============================================================================
-VECTOR SEARCH - Composition layer (OllamaEmbeddings + SQLDatabase)
+VECTOR SEARCH - Composition layer (AgentEmbedder + SQLDatabase)
 =============================================================================
 
-Combines LangChain OllamaEmbeddings for query vector generation with
+Combines AgentEmbedder (ollama SDK) for query vector generation with
 SQLDatabase.run() to call our existing PostgreSQL search functions.
 
 Uses the existing search_documents() and find_similar_solutions() SQL
@@ -29,7 +29,7 @@ async def search_documents(
     """
     Semantic document search using pgvector.
 
-    1. Generates embedding via LangChain OllamaEmbeddings
+    1. Generates embedding via AgentEmbedder (ollama SDK)
     2. Calls search_documents() PostgreSQL function via LangChain SQLDatabase
 
     This reuses the same SQL function the Next.js API calls,
@@ -68,7 +68,7 @@ async def find_similar_solutions(
     """
     Find solutions similar to a use case description.
 
-    1. Generates embedding via LangChain OllamaEmbeddings
+    1. Generates embedding via AgentEmbedder (ollama SDK)
     2. Calls find_similar_solutions() PostgreSQL function via LangChain SQLDatabase
     """
     embedding = await generate_embedding(use_case_text)
