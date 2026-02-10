@@ -116,6 +116,42 @@ class GetCurrentContextTool(LangChainTool):
                 "overview_preview": (summary.solution_overview or "")[:300] + "..." if summary.solution_overview and len(summary.solution_overview) > 300 else summary.solution_overview
             })
 
+        elif scope.type == 'product':
+            result.update({
+                "product_id": scope.product_id,
+                "vendor": summary.vendor,
+                "category": summary.category,
+                "ownership": summary.ownership,
+                "description": summary.product_description,
+                "documentation_url": summary.documentation_url,
+                "document_count": summary.document_count,
+                "linked_accounts": [
+                    {"name": a.get('name'), "industry": a.get('industry')}
+                    for a in (summary.linked_accounts or [])
+                ],
+                "linked_opportunities": [
+                    {"name": o.get('name'), "status": o.get('status'), "account": o.get('accountName')}
+                    for o in (summary.linked_opportunities or [])
+                ],
+                "available_actions": [
+                    "Search this product's documents",
+                    "View linked accounts",
+                    "View linked opportunities",
+                    "Get product details"
+                ]
+            })
+
+        elif scope.type == 'product-list':
+            result.update({
+                "message": "Viewing all products. Can search documentation across all products.",
+                "available_actions": [
+                    "Search all product documents",
+                    "Find products by name or category",
+                    "Compare products",
+                    "Get details for any product"
+                ]
+            })
+
         elif scope.type == 'dashboard':
             result.update({
                 "message": "Viewing dashboard - pipeline overview",

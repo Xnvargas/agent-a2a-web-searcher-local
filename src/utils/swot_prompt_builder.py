@@ -166,6 +166,73 @@ AUTOMATIC SCOPING:
 - Focus on helping refine and improve the solution""")
 
     # -------------------------------------------------------------------------
+    # PRODUCT CONTEXT
+    # -------------------------------------------------------------------------
+    elif scope.type == 'product' and summary.entity_name:
+        context_lines.append(f"""
+MODE: Product View
+Product: {summary.entity_name}
+Vendor: {summary.vendor or 'Unknown'}
+Category: {summary.category or 'Unknown'}
+Ownership: {summary.ownership or 'Unknown'}""")
+
+        if summary.product_description:
+            desc_preview = summary.product_description[:400]
+            if len(summary.product_description) > 400:
+                desc_preview += "..."
+            context_lines.append(f"\nDescription:\n{desc_preview}")
+
+        if summary.documentation_url:
+            context_lines.append(f"Documentation: {summary.documentation_url}")
+
+        if summary.document_count is not None:
+            context_lines.append(f"Indexed documents: {summary.document_count}")
+
+        if summary.linked_accounts:
+            account_names = [a.get('name', 'Unknown') for a in summary.linked_accounts[:5]]
+            accounts_str = ', '.join(account_names)
+            if len(summary.linked_accounts) > 5:
+                accounts_str += f" +{len(summary.linked_accounts) - 5} more"
+            context_lines.append(f"\nAccounts using this product: {accounts_str}")
+
+        if summary.linked_opportunities:
+            opp_names = [
+                f"{o.get('name', 'Unknown')} ({o.get('accountName', '')})"
+                for o in summary.linked_opportunities[:5]
+            ]
+            opps_str = ', '.join(opp_names)
+            if len(summary.linked_opportunities) > 5:
+                opps_str += f" +{len(summary.linked_opportunities) - 5} more"
+            context_lines.append(f"Active opportunities: {opps_str}")
+
+        context_lines.append(f"""
+AUTOMATIC SCOPING:
+- search_documents: Filters to this product only (ID: {scope.product_id})
+- get_entity_details: Can look up this product's full details
+- query_entities: Can find accounts and opportunities linked to this product
+- Help the user understand this product's documentation and use cases
+- Do NOT reference documents from other products unless user explicitly asks""")
+
+    # -------------------------------------------------------------------------
+    # PRODUCT LIST CONTEXT
+    # -------------------------------------------------------------------------
+    elif scope.type == 'product-list':
+        context_lines.append("""
+MODE: Product Catalog
+Viewing all products across the portfolio.""")
+
+        if summary.products:
+            for p in summary.products:
+                context_lines.append(f"  - {p.get('name', 'Unknown')}")
+
+        context_lines.append("""
+AUTOMATIC SCOPING:
+- search_documents: Can search across all product documentation
+- query_entities: Can search all products by name, category, or vendor
+- Help compare products, find documentation, suggest products for opportunities
+- get_entity_details: Can look up any product's full details""")
+
+    # -------------------------------------------------------------------------
     # DASHBOARD CONTEXT
     # -------------------------------------------------------------------------
     elif scope.type == 'dashboard':
