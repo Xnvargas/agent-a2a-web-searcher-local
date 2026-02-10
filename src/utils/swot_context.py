@@ -47,11 +47,12 @@ class SWOTScope:
     Scope identifies WHERE in the app the user is.
     Tools use this to automatically filter queries.
     """
-    type: str = "global"  # 'global', 'opportunity', 'account', 'solution', 'dashboard'
+    type: str = "global"  # 'global', 'opportunity', 'account', 'solution', 'dashboard', 'product', 'product-list'
     opportunity_id: Optional[str] = None
     account_id: Optional[str] = None
     solution_id: Optional[str] = None
-    product_ids: Optional[List[str]] = None
+    product_id: Optional[str] = None        # Single product focus (scope.type == 'product')
+    product_ids: Optional[List[str]] = None  # Filter list for document search
 
     def has_opportunity_scope(self) -> bool:
         """Check if we have opportunity-level scope."""
@@ -60,6 +61,14 @@ class SWOTScope:
     def has_account_scope(self) -> bool:
         """Check if we have account-level scope."""
         return self.type in ('opportunity', 'account', 'solution') and self.account_id is not None
+
+    def has_product_scope(self) -> bool:
+        """Check if we have single-product scope."""
+        return self.type == 'product' and self.product_id is not None
+
+    def has_product_list_scope(self) -> bool:
+        """Check if we're in product-list mode (all products)."""
+        return self.type == 'product-list'
 
     def get_filter_dict(self) -> Dict[str, Any]:
         """
@@ -73,6 +82,8 @@ class SWOTScope:
             filters['accountId'] = self.account_id
         if self.solution_id:
             filters['solutionId'] = self.solution_id
+        if self.product_id:
+            filters['productId'] = self.product_id
         if self.product_ids:
             filters['productIds'] = self.product_ids
         return filters
@@ -109,6 +120,16 @@ class SWOTContextSummary:
     contacts: Optional[List[Dict[str, Any]]] = None
     technology_footprint: Optional[List[Dict[str, Any]]] = None
     team_members: Optional[List[Dict[str, Any]]] = None
+
+    # Product fields (when scope.type == 'product' or 'product-list')
+    vendor: Optional[str] = None
+    ownership: Optional[str] = None
+    category: Optional[str] = None
+    product_description: Optional[str] = None
+    documentation_url: Optional[str] = None
+    document_count: Optional[int] = None
+    linked_accounts: Optional[List[Dict[str, Any]]] = None
+    linked_opportunities: Optional[List[Dict[str, Any]]] = None
 
 
 @dataclass
@@ -148,6 +169,7 @@ def extract_swot_context(extensions: Optional[Dict[str, Any]]) -> Optional[SWOTC
         opportunity_id=scope_data.get('opportunityId'),
         account_id=scope_data.get('accountId'),
         solution_id=scope_data.get('solutionId'),
+        product_id=scope_data.get('productId'),
         product_ids=scope_data.get('productIds')
     )
 
@@ -169,7 +191,16 @@ def extract_swot_context(extensions: Optional[Dict[str, Any]]) -> Optional[SWOTC
         products=summary_data.get('products'),
         contacts=summary_data.get('contacts'),
         technology_footprint=summary_data.get('technologyFootprint'),
-        team_members=summary_data.get('teamMembers')
+        team_members=summary_data.get('teamMembers'),
+        # Product fields
+        vendor=summary_data.get('vendor'),
+        ownership=summary_data.get('ownership'),
+        category=summary_data.get('category'),
+        product_description=summary_data.get('productDescription'),
+        documentation_url=summary_data.get('documentationUrl'),
+        document_count=summary_data.get('documentCount'),
+        linked_accounts=summary_data.get('linkedAccounts'),
+        linked_opportunities=summary_data.get('linkedOpportunities'),
     )
 
     return SWOTContextData(
@@ -294,6 +325,24 @@ class SWOTContext:
         """Convenience method to get account ID."""
         ctx = _current_context.get()
         return ctx.scope.account_id if ctx else None
+
+    @staticmethod
+    def get_product_id() -> Optional[str]:
+        """Convenience method to get product ID."""
+        ctx = _current_context.get()
+        return ctx.scope.product_id if ctx else None
+
+    @staticmethod
+    def is_product_scope() -> bool:
+        """Check if current scope is product-focused."""
+        ctx = _current_context.get()
+        return ctx is not None and ctx.scope.type == 'product'
+
+    @staticmethod
+    def is_product_list_scope() -> bool:
+        """Check if current scope is product-list."""
+        ctx = _current_context.get()
+        return ctx is not None and ctx.scope.type == 'product-list'
 
     @staticmethod
     def clear() -> None:
