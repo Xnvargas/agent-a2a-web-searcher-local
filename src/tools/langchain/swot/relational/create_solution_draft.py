@@ -81,7 +81,7 @@ class CreateSolutionDraftTool(LangChainTool):
 
             # Direct SQL INSERT via LangChain SQLDatabase
             result = run_query(f"""
-                INSERT INTO solutions (opportunity_id, overview, architecture, status, version)
+                INSERT INTO solutions (opportunity_id, overview, architecture_details, status, version)
                 VALUES (
                     '{target_opp}'::uuid,
                     '{safe_overview}',
