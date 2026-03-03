@@ -381,7 +381,11 @@ async def Web_Agent(
     #   from tools import ToolRegistry
     #   tools = ToolRegistry.get_tools_by_type("mcp")  # Only MCP tools
     # -------------------------------------------------------------------------
+    from tools.langchain.swot.graph_memory import get_graph_memory_tools
+
+# Add to your tool list
     tools = get_all_tools()
+    tools = tools + get_graph_memory_tools()
 
     yield trajectory.trajectory_metadata(
         title="Tools Loaded from Registry",
