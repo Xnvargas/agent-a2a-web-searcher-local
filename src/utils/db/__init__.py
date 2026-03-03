@@ -21,12 +21,12 @@ from .embeddings import (
 )
 from .sql import get_sql_database, run_query, get_table_info
 from .graph import get_age_graph, run_cypher
-from .vector_search import search_documents, find_similar_solutions
+from .vector_search import search_documents, search_documents_fulltext, find_similar_solutions
 
 __all__ = [
     'get_embedder', 'get_embeddings',
     'generate_embedding', 'generate_embeddings_batch',
     'get_sql_database', 'run_query', 'get_table_info',
     'get_age_graph', 'run_cypher',
-    'search_documents', 'find_similar_solutions',
+    'search_documents', 'search_documents_fulltext', 'find_similar_solutions',
 ]

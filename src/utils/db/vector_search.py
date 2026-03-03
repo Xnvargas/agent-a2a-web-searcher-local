@@ -60,6 +60,33 @@ async def search_documents(
     return run_query(sql)
 
 
+async def search_documents_fulltext(
+    query_text: str,
+    account_id: str = None,
+    opportunity_id: str = None,
+    solution_id: str = None,
+    product_ids: list[str] = None,
+    limit: int = 10,
+) -> str:
+    """Fulltext search using tsvector — no embedding needed."""
+    acc = f"'{account_id}'::uuid" if account_id else "NULL::uuid"
+    opp = f"'{opportunity_id}'::uuid" if opportunity_id else "NULL::uuid"
+    sol = f"'{solution_id}'::uuid" if solution_id else "NULL::uuid"
+
+    if product_ids:
+        pids = ",".join(f"'{p}'::uuid" for p in product_ids)
+        prod = f"ARRAY[{pids}]::uuid[]"
+    else:
+        prod = "NULL::uuid[]"
+
+    sql = f"""
+        SELECT * FROM search_documents_fulltext(
+            '{query_text.replace("'", "''")}', {acc}, {opp}, {sol}, {prod}, {limit}
+        )
+    """
+    return run_query(sql)
+
+
 async def find_similar_solutions(
     use_case_text: str,
     limit: int = 5,

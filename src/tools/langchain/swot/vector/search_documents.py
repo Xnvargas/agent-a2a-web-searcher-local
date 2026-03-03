@@ -11,12 +11,14 @@ Migrated from httpx HTTP proxy to direct DB access:
 =============================================================================
 """
 
+import asyncio
 from typing import Dict, Any, Optional
 from langchain_core.tools import tool
 
 from tools.langchain.base import LangChainTool
 from utils.swot_context import SWOTContext
 from utils.db.vector_search import search_documents as db_search
+from utils.db.vector_search import search_documents_fulltext as db_fulltext_search
 
 
 class SearchDocumentsTool(LangChainTool):
@@ -64,7 +66,7 @@ class SearchDocumentsTool(LangChainTool):
         limit: int = 5,
         override_scope: bool = False
     ) -> str:
-        """Execute semantic document search via direct DB access."""
+        """Execute semantic and fulltext document search via direct DB access."""
         try:
             limit = max(1, min(20, limit))
 
@@ -76,17 +78,34 @@ class SearchDocumentsTool(LangChainTool):
                 if filters:
                     scope_applied = True
 
-            # Direct DB call: AgentEmbedder → search_documents() SQL function
-            result = await db_search(
-                query_text=query,
-                account_id=filters.get('accountId'),
-                opportunity_id=filters.get('opportunityId'),
-                solution_id=filters.get('solutionId'),
-                product_ids=filters.get('productIds'),
-                limit=limit,
+            # Run both searches concurrently
+            semantic_results, fulltext_results = await asyncio.gather(
+                db_search(
+                    query_text=query,
+                    account_id=filters.get('accountId'),
+                    opportunity_id=filters.get('opportunityId'),
+                    solution_id=filters.get('solutionId'),
+                    product_ids=filters.get('productIds'),
+                    limit=limit,
+                ),
+                db_fulltext_search(
+                    query_text=query,
+                    account_id=filters.get('accountId'),
+                    opportunity_id=filters.get('opportunityId'),
+                    solution_id=filters.get('solutionId'),
+                    product_ids=filters.get('productIds'),
+                    limit=limit,
+                ),
             )
 
-            if not result or result.strip() == '' or result.strip() == '[]':
+            # Combine results
+            combined = []
+            if semantic_results and semantic_results.strip() and semantic_results.strip() != '[]':
+                combined.append(f"**Semantic results (chunk-level):**\n{semantic_results}")
+            if fulltext_results and fulltext_results.strip() and fulltext_results.strip() != '[]':
+                combined.append(f"**Fulltext results (document-level):**\n{fulltext_results}")
+
+            if not combined:
                 scope = SWOTContext.get_scope()
                 if scope_applied and scope:
                     return (
@@ -96,14 +115,14 @@ class SearchDocumentsTool(LangChainTool):
                     )
                 return f"No documents found matching '{query}'."
 
-            # Build response header
+            # Build response header with scope info
             scope_msg = ""
             if scope_applied:
                 scope = SWOTContext.get_scope()
                 if scope:
                     scope_msg = f" (filtered to current {scope.type})"
 
-            return f"Document search results{scope_msg}:\n\n{result}"
+            return f"Document search results{scope_msg}:\n\n" + "\n\n".join(combined)
 
         except Exception as e:
             return f"Error searching documents: {str(e)}"
