@@ -11,6 +11,7 @@ Uses psycopg2 driver (compatible with AGEGraph's psycopg2 dependency).
 
 import os
 from langchain_community.utilities.sql_database import SQLDatabase
+from sqlalchemy import text
 
 _db_instance = None
 
@@ -58,9 +59,40 @@ def get_sql_database() -> SQLDatabase:
 
 
 def run_query(sql: str) -> str:
-    """Execute a read-only SQL query and return results as string."""
+    """Execute a SQL query via LangChain SQLDatabase and return results as string."""
     db = get_sql_database()
     return db.run(sql)
+
+
+def run_query_params(sql: str, params: dict) -> str:
+    """
+    Execute a parameterized SQL query using the shared SQLDatabase engine.
+
+    Uses SQLAlchemy text() with explicit bind parameters, bypassing
+    LangChain's db.run() which can misinterpret :name patterns in
+    raw content (markdown, URLs, JSON, etc.).
+
+    Args:
+        sql: SQL string with :named placeholders (e.g., :content, :doc_id)
+        params: Dict mapping placeholder names to values
+
+    Returns:
+        String representation of results (for SELECT) or row count info.
+
+    Example:
+        run_query_params(
+            "UPDATE documents SET extracted_text = :content WHERE id = :doc_id::uuid",
+            {"content": markdown_text, "doc_id": "abc-123"}
+        )
+    """
+    db = get_sql_database()
+    with db._engine.connect() as conn:
+        result = conn.execute(text(sql), params)
+        conn.commit()
+        if result.returns_rows:
+            rows = result.fetchall()
+            return str(rows)
+        return f"{result.rowcount} row(s) affected"
 
 
 def get_table_info(tables: list[str] = None) -> str:
