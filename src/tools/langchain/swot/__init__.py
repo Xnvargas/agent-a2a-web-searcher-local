@@ -8,7 +8,7 @@ Context-aware tools for the SWOT application. Each tool:
 2. Registers via ToolRegistry (auto-discovered by agent)
 3. Uses SWOTContext for automatic scope filtering
 
-TOOLS (10 total):
+TOOLS (11 total):
 -----------------
 
 Context:
@@ -26,6 +26,7 @@ Graph (AGEGraph):
 Relational (SQLDatabase):
 - query_entities: Search accounts, opportunities, products (NEW)
 - get_entity_details: Get full entity details by ID (NEW)
+- get_document_text: Get full extracted text of a document by ID (NEW)
 - create_solution_draft: Create a new solution architecture
 - create_document_artifact: Create and save generated content
 
@@ -50,6 +51,7 @@ from .graph.explore_relationships import ExploreRelationshipsTool
 from .relational.query_entities import QueryEntitiesTool
 from .relational.get_entity_details import GetEntityDetailsTool
 from .relational.create_solution_draft import CreateSolutionDraftTool
+from .relational.get_document_text import GetDocumentTextTool
 from .relational.create_document_artifact import CreateDocumentArtifactTool
 
 # Register all tools with the registry
@@ -62,10 +64,11 @@ ToolRegistry.register(QueryCoverageTool())
 ToolRegistry.register(ExploreRelationshipsTool())
 ToolRegistry.register(QueryEntitiesTool())
 ToolRegistry.register(GetEntityDetailsTool())
+ToolRegistry.register(GetDocumentTextTool())
 ToolRegistry.register(CreateSolutionDraftTool())
 ToolRegistry.register(CreateDocumentArtifactTool())
 
-print(f"SWOT Tools registered: 10 tools (7 migrated + 3 new)")
+print(f"SWOT Tools registered: 11 tools (7 migrated + 4 new)")
 
 __all__ = [
     'GetCurrentContextTool',
@@ -76,6 +79,7 @@ __all__ = [
     'ExploreRelationshipsTool',
     'QueryEntitiesTool',
     'GetEntityDetailsTool',
+    'GetDocumentTextTool',
     'CreateSolutionDraftTool',
     'CreateDocumentArtifactTool',
 ]
