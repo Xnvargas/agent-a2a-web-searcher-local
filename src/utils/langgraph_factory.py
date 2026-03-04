@@ -70,6 +70,11 @@ from typing_extensions import TypedDict, Annotated
 from langgraph.graph import StateGraph, START, END
 
 
+# Maximum characters for a single tool result stored in message history.
+# Prevents large payloads (e.g. vector search dumps) from filling the context window.
+MAX_TOOL_RESULT_CHARS = 4000
+
+
 # =============================================================================
 # STATE SCHEMA
 # =============================================================================
@@ -220,6 +225,7 @@ def create_langgraph_agent(
         reasoning=True,  # Critical: Captures thinking tokens in additional_kwargs['reasoning_content']
         streaming=True,  # Enable token-level streaming
         num_predict=-1,  # Optional: Unlimited token generation
+        num_ctx=50000,  # Match OLLAMA_CONTEXT_LENGTH on the server
     )
     
     # -------------------------------------------------------------------------
@@ -339,8 +345,16 @@ def create_langgraph_agent(
                     print(f"... (truncated, total: {len(str(observation))} chars)")
                 print(f"{'-'*40}")
                 
+                raw = str(observation)
+                if len(raw) > MAX_TOOL_RESULT_CHARS:
+                    truncated = raw[:MAX_TOOL_RESULT_CHARS]
+                    content = f"{truncated}\n\n[... result truncated at {MAX_TOOL_RESULT_CHARS} chars. Full length: {len(raw)} chars]"
+                    print(f"⚠️  Tool result truncated: {len(raw)} → {MAX_TOOL_RESULT_CHARS} chars")
+                else:
+                    content = raw
+
                 result.append(ToolMessage(
-                    content=str(observation),
+                    content=content,
                     tool_call_id=tool_call_id,
                     name=tool_name
                 ))
