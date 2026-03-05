@@ -464,7 +464,7 @@ async def Web_Agent(
     last_tool_name = None       # For titling the reasoning step
     reasoning_step_counter = 0  # Counter for batched reasoning steps
 
-    config = {"recursion_limit": 100}
+    config = {"recursion_limit": 15}
 
     # -------------------------------------------------------------------------
     # TOKEN-LEVEL STREAMING WITH CONTENT CATEGORIZATION & ERROR HANDLING

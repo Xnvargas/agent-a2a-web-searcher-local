@@ -78,7 +78,7 @@ class GetDocumentTextTool(LangChainTool):
             # Sanitize document_id
             safe_id = document_id.replace("'", "''")
 
-            # Get metadata
+            # Get metadata INCLUDING total text length
             meta_result = run_query(f"""
                 SELECT title, status, page_count,
                        COALESCE(LENGTH(extracted_text), 0) AS text_length
@@ -88,6 +88,19 @@ class GetDocumentTextTool(LangChainTool):
 
             if not meta_result or meta_result.strip() == '':
                 return f"Document '{document_id}' not found."
+
+            # Parse out the text_length for pagination logic
+            total_length = 0
+            try:
+                import re
+                length_match = re.search(r"text_length['\"]?\s*[:=]\s*(\d+)", meta_result)
+                if not length_match:
+                    # Try tuple format: (..., 12345)
+                    length_match = re.search(r",\s*(\d+)\s*\)?$", meta_result.strip())
+                if length_match:
+                    total_length = int(length_match.group(1))
+            except (ValueError, AttributeError):
+                total_length = 0
 
             # Get text slice
             text_result = run_query(f"""
@@ -110,11 +123,21 @@ class GetDocumentTextTool(LangChainTool):
                 header += f" (offset: {offset})"
             header += f"\n{'='*60}\n"
 
-            footer = (
-                f"\n{'='*60}\n"
-                f"Showing up to {max_length} chars from offset {offset}. "
-                f"Call again with offset={offset + max_length} to continue reading."
-            )
+            # Smart pagination footer — only suggest pagination when there IS more content
+            remaining = total_length - offset - max_length
+            if remaining > 0:
+                footer = (
+                    f"\n{'='*60}\n"
+                    f"Showing {max_length} of {total_length} total chars "
+                    f"(from offset {offset}). "
+                    f"{remaining} chars remaining. "
+                    f"Call again with offset={offset + max_length} to continue."
+                )
+            else:
+                footer = (
+                    f"\n{'='*60}\n"
+                    f"End of document. Total length: {total_length} chars."
+                )
 
             return f"{header}{text_result}{footer}"
 
