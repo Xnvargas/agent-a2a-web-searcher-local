@@ -26,7 +26,8 @@ class GetEntityDetailsTool(LangChainTool):
     name = "get_entity_details"
     description = (
         "Get detailed information about a specific entity by its ID. "
-        "Supports entity types: 'account', 'opportunity', 'product', 'contact', 'solution'. "
+        "Supports entity types: 'account', 'opportunity', 'product', "
+        "'contact', 'solution', 'document'. "
         "Returns full details including related data."
     )
 
@@ -35,7 +36,7 @@ class GetEntityDetailsTool(LangChainTool):
             "entity_type": {
                 "type": "string",
                 "required": True,
-                "description": "Type of entity: 'account', 'opportunity', 'product', 'contact', or 'solution'"
+                "description": "Type of entity: 'account', 'opportunity', 'product', 'contact', 'solution', or 'document'"
             },
             "entity_id": {
                 "type": "string",
@@ -119,7 +120,8 @@ class GetEntityDetailsTool(LangChainTool):
 
             elif entity_type == "solution":
                 result = run_query(f"""
-                    SELECT s.id, s.overview, s.architecture, s.status, s.version,
+                    SELECT s.id, s.overview, s.architecture_details, s.implementation_notes,
+                        s.status, s.version,
                         o.name as opportunity_name, a.name as account_name
                     FROM solutions s
                     JOIN opportunities o ON o.id = s.opportunity_id
@@ -132,10 +134,24 @@ class GetEntityDetailsTool(LangChainTool):
 
                 return f"Solution details:\n{result}"
 
+            elif entity_type == "document":
+                result = run_query(f"""
+                    SELECT d.id, d.title, d.filename, d.category, d.status,
+                        d.file_size_bytes, d.page_count,
+                        COALESCE(LENGTH(d.extracted_text), 0) as text_length
+                    FROM ag_catalog.documents d
+                    WHERE d.id = '{safe_id}'::uuid
+                """)
+
+                if not result or result.strip() == '' or result.strip() == '[]':
+                    return f"Document not found with ID: {entity_id}"
+
+                return f"Document details:\n{result}"
+
             else:
                 return (
                     f"Unknown entity_type: {entity_type}. "
-                    "Use 'account', 'opportunity', 'product', 'contact', or 'solution'."
+                    "Use 'account', 'opportunity', 'product', 'contact', 'solution', or 'document'."
                 )
 
         except Exception as e:

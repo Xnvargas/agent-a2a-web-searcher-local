@@ -27,9 +27,13 @@ class CreateSolutionDraftTool(LangChainTool):
 
     name = "create_solution_draft"
     description = (
-        "Create a new solution architecture draft. Automatically links to the "
-        "current opportunity if viewing one. Use this to save solution ideas, "
-        "architecture overviews, and technical approaches. If a solution already "
+        "REQUIRED: Use this tool whenever the user asks to create, draft, or design "
+        "a solution architecture. This saves the architecture to the database so it "
+        "appears in the opportunity's Solution Architecture section in the UI. "
+        "Do NOT just describe architectures in chat text — always persist using this tool. "
+        "Both overview and architecture_details support full markdown including "
+        "Mermaid diagrams (```mermaid fenced code blocks). "
+        "Automatically links to the current opportunity. If a solution already "
         "exists, this creates a new version."
     )
 
