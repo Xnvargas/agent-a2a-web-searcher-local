@@ -8,7 +8,7 @@ Context-aware tools for the SWOT application. Each tool:
 2. Registers via ToolRegistry (auto-discovered by agent)
 3. Uses SWOTContext for automatic scope filtering
 
-TOOLS (11 total):
+TOOLS (12 total):
 -----------------
 
 Context:
@@ -28,6 +28,7 @@ Relational (SQLDatabase):
 - get_entity_details: Get full entity details by ID (NEW)
 - get_document_text: Get full extracted text of a document by ID (NEW)
 - create_solution_draft: Create a new solution architecture
+- update_solution: Update an existing solution's fields in-place
 - create_document_artifact: Create and save generated content
 
 =============================================================================
@@ -51,6 +52,7 @@ from .graph.explore_relationships import ExploreRelationshipsTool
 from .relational.query_entities import QueryEntitiesTool
 from .relational.get_entity_details import GetEntityDetailsTool
 from .relational.create_solution_draft import CreateSolutionDraftTool
+from .relational.update_solution import UpdateSolutionTool
 from .relational.get_document_text import GetDocumentTextTool
 from .relational.create_document_artifact import CreateDocumentArtifactTool
 
@@ -66,9 +68,10 @@ ToolRegistry.register(QueryEntitiesTool())
 ToolRegistry.register(GetEntityDetailsTool())
 ToolRegistry.register(GetDocumentTextTool())
 ToolRegistry.register(CreateSolutionDraftTool())
+ToolRegistry.register(UpdateSolutionTool())
 ToolRegistry.register(CreateDocumentArtifactTool())
 
-print(f"SWOT Tools registered: 11 tools (7 migrated + 4 new)")
+print(f"SWOT Tools registered: 12 tools (7 migrated + 5 new)")
 
 __all__ = [
     'GetCurrentContextTool',
@@ -81,5 +84,6 @@ __all__ = [
     'GetEntityDetailsTool',
     'GetDocumentTextTool',
     'CreateSolutionDraftTool',
+    'UpdateSolutionTool',
     'CreateDocumentArtifactTool',
 ]

@@ -51,6 +51,64 @@ The overview and architecture_details fields support full markdown including:
 - Mermaid diagrams in ```mermaid fenced code blocks
 - Code blocks for configs or API examples
 
+## Mermaid Diagram Rules
+
+When generating Mermaid diagrams in ```mermaid fenced code blocks, follow these rules strictly:
+
+### General
+- Always start with the diagram type keyword on its own line: `graph`, `flowchart`, `sequenceDiagram`, `erDiagram`, `classDiagram`
+- Use simple alphanumeric node IDs (no spaces, no special chars): `nodeA`, `node_1`, NOT `node A`
+- Put display labels in square brackets: `nodeA["Node A with spaces"]`
+- NEVER use HTML tags or special Unicode inside Mermaid blocks
+- Keep diagrams under 40 lines for readability
+
+### Flowcharts (graph / flowchart) — PREFERRED for architecture diagrams
+- Use `graph TB` (top-bottom) or `graph LR` (left-right)
+- Node shapes: `A[Rectangle]`, `A([Stadium])`, `A{Diamond}`, `A[(Database)]`
+- Arrows: `-->`, `-.->` (dotted), `==>` (thick)
+- Labels on arrows: `A -->|"label text"| B`
+- Subgraphs: `subgraph Title` ... `end`
+
+### ER Diagrams — USE SPARINGLY (strict parser)
+- Relationships: `ENTITY1 ||--o{ ENTITY2 : "label"`
+  - The label MUST be in double quotes
+  - There MUST be a space before and after the colon
+- Attributes: Two-word format only: `type name`
+  - Valid:   `string id`
+  - Valid:   `string customer_name`
+  - INVALID: `string id PK` (no PK/FK annotations inline)
+  - INVALID: `varchar(255) name` (no SQL types — use string, int, float, date, text)
+- To show PK/FK, use comments or a separate key section — NOT inline annotations
+
+### Sequence Diagrams
+- Participants: `participant A as "Display Name"`
+- Messages: `A->>B: Message text`
+- Activations: `activate A` / `deactivate A`
+
+### IMPORTANT
+- If you're unsure whether ER diagram syntax is correct, use a flowchart instead —
+  flowcharts are more forgiving and render reliably.
+- For data models, prefer a TABLE-style layout in a flowchart with subgraphs over erDiagram.
+
+## Editing vs. Creating Solutions
+
+- If the opportunity ALREADY HAS a solution and the user asks to revise/fix/update/edit it:
+  → Use `update_solution` (updates in-place, preserves version)
+- If the opportunity has NO solution yet, or the user explicitly asks for a "new" version:
+  → Use `create_solution_draft` (creates new version)
+- Before updating, ALWAYS read the current solution first using
+  `get_entity_details(entity_type='solution', entity_id=...)` so you can
+  make targeted changes rather than regenerating everything from scratch.
+- When fixing a single diagram, update ONLY the architecture_details field.
+  Do NOT re-send the overview or implementation_notes — omitted fields are
+  left unchanged.
+
+When showing data models or entity relationships:
+- PREFER flowchart with styled subgraphs over erDiagram
+- Use node labels with \\n separators to show key attributes
+- Color-code by domain (e.g., blue for regulatory, green for controls)
+- erDiagram syntax is very strict and breaks easily — only use if explicitly requested
+
 Always be helpful, accurate, and transparent about your information sources."""
 
 

@@ -15,6 +15,7 @@ from langchain_core.tools import tool
 from tools.langchain.base import LangChainTool
 from utils.swot_context import SWOTContext
 from utils.db.sql import run_query
+from utils.mermaid_validator import validate_and_fix_mermaid, format_validation_summary
 
 
 class CreateSolutionDraftTool(LangChainTool):
@@ -77,9 +78,23 @@ class CreateSolutionDraftTool(LangChainTool):
                     "Please specify an opportunity_id or navigate to an opportunity page."
                 )
 
+            # Validate and fix Mermaid diagrams before persisting
+            mermaid_notes = []
+            validated_overview = overview.strip()
+            validated_arch = architecture_details.strip() if architecture_details else None
+
+            validated_overview, overview_results = validate_and_fix_mermaid(validated_overview)
+            if overview_results:
+                mermaid_notes.append(format_validation_summary(overview_results))
+
+            if validated_arch:
+                validated_arch, arch_results = validate_and_fix_mermaid(validated_arch)
+                if arch_results:
+                    mermaid_notes.append(format_validation_summary(arch_results))
+
             # Escape single quotes in content
-            safe_overview = overview.strip().replace("'", "''")
-            safe_arch = architecture_details.strip().replace("'", "''") if architecture_details else None
+            safe_overview = validated_overview.replace("'", "''")
+            safe_arch = validated_arch.replace("'", "''") if validated_arch else None
 
             arch_value = f"'{safe_arch}'" if safe_arch else "NULL"
 
@@ -100,12 +115,17 @@ class CreateSolutionDraftTool(LangChainTool):
             ctx = SWOTContext.get_current()
             opp_name = ctx.summary.entity_name if ctx else "the opportunity"
 
+            validation_info = ""
+            if mermaid_notes:
+                validation_info = "\n\n**Mermaid Validation:**\n" + "\n".join(mermaid_notes)
+
             return (
                 f"Solution draft created successfully!\n\n"
                 f"- **Linked to:** {opp_name}\n"
                 f"- **Status:** Draft\n"
                 f"- **Details:** {result}\n\n"
                 f"Overview saved:\n{overview[:200]}{'...' if len(overview) > 200 else ''}"
+                f"{validation_info}"
             )
 
         except Exception as e:

@@ -191,6 +191,10 @@ server = Server()
                 description="Create a new solution architecture draft linked to an opportunity.",
             ),
             AgentDetailTool(
+                name="update_solution",
+                description="Update an existing solution's overview, architecture, or implementation notes in-place.",
+            ),
+            AgentDetailTool(
                 name="get_document_text",
                 description="Get the full extracted text of a document by ID. Supports pagination for large documents.",
             ),
