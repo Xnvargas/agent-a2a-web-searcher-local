@@ -157,7 +157,7 @@ def create_langgraph_agent(
     tools: List["BaseTool"] = None,
     system_prompt: str = None,
     temperature: float = 0,
-    recursion_limit: int = 15
+    recursion_limit: int = 45
 ) -> StateGraph:
     """
     Create a LangGraph agent configured with the provided tools.
@@ -175,7 +175,7 @@ def create_langgraph_agent(
                all registered tools from ToolRegistry.
         system_prompt: Custom system prompt. If None, uses DEFAULT_SYSTEM_PROMPT.
         temperature: LLM temperature (0 = deterministic). Default: 0
-        recursion_limit: Max recursion for tool loops. Default: 15
+        recursion_limit: Max recursion for tool loops. Default: 45
     
     Returns:
         Compiled StateGraph ready for streaming execution
