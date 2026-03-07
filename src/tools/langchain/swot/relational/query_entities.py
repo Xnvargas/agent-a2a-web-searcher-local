@@ -27,9 +27,9 @@ class QueryEntitiesTool(LangChainTool):
 
     name = "query_entities"
     description = (
-        "Search for accounts, opportunities, or products by name, status, or filters. "
-        "Use this to find entities when operating without page context, or to explore "
-        "data beyond the current scope."
+        "Search for accounts, opportunities, products, or solutions by name, "
+        "status, or filters. Use this to find entities when operating without "
+        "page context, or to explore data beyond the current scope."
     )
 
     def get_schema(self) -> Dict[str, Dict[str, Any]]:
@@ -37,7 +37,7 @@ class QueryEntitiesTool(LangChainTool):
             "entity_type": {
                 "type": "string",
                 "required": True,
-                "description": "Type of entity to search: 'account', 'opportunity', or 'product'"
+                "description": "Type of entity to search: 'account', 'opportunity', 'product', or 'solution'"
             },
             "search_term": {
                 "type": "string",
@@ -109,8 +109,33 @@ class QueryEntitiesTool(LangChainTool):
                     ORDER BY name LIMIT {limit}
                 """)
 
+            elif entity_type == "solution":
+                conditions = ["1=1"]
+                if search_term:
+                    safe_term = search_term.replace("'", "''")
+                    conditions.append(
+                        f"(s.overview ILIKE '%{safe_term}%' OR o.name ILIKE '%{safe_term}%')"
+                    )
+                if status:
+                    safe_status = status.replace("'", "''")
+                    conditions.append(f"s.status = '{safe_status}'")
+
+                where_clause = " AND ".join(conditions)
+                result = run_query(f"""
+                    SELECT s.id, s.status, s.version,
+                        o.name as opportunity_name, a.name as account_name,
+                        LEFT(s.overview, 200) as overview_preview
+                    FROM solutions s
+                    JOIN opportunities o ON o.id = s.opportunity_id
+                    JOIN accounts a ON a.id = o.account_id
+                    WHERE {where_clause}
+                    ORDER BY s.updated_at DESC
+                    LIMIT {limit}
+                """)
+                return f"Solutions found:\n{result}" if result and result.strip() and result.strip() != '[]' else "No solutions found."
+
             else:
-                return f"Unknown entity_type: {entity_type}. Use 'account', 'opportunity', or 'product'."
+                return f"Unknown entity_type: {entity_type}. Use 'account', 'opportunity', 'product', or 'solution'."
 
             if not result or result.strip() == '' or result.strip() == '[]':
                 return f"No {entity_type} records found matching your criteria."
@@ -128,6 +153,6 @@ class QueryEntitiesTool(LangChainTool):
             status: Optional[str] = None,
             limit: int = 10
         ) -> str:
-            """Search for accounts, opportunities, or products by name, status, or filters."""
+            """Search for accounts, opportunities, products, or solutions by name, status, or filters."""
             return "LANGCHAIN_TOOL_PLACEHOLDER"
         return query_entities

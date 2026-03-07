@@ -99,9 +99,9 @@ class UpdateSolutionTool(LangChainTool):
 
             if not target_id:
                 return (
-                    "No solution_id provided and none found in current context. "
-                    "Navigate to an opportunity with an existing solution, or "
-                    "provide a solution_id."
+                    "No solution found to update. No solution_id was provided, "
+                    "none exists in the current context, and no solution is linked "
+                    "to the current opportunity. Use create_solution_draft to create one first."
                 )
 
             # Validate and fix Mermaid diagrams in provided fields

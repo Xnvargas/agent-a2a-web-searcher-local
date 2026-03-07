@@ -27,10 +27,14 @@ class GetCurrentContextTool(LangChainTool):
 
     name = "get_current_context"
     description = (
-        "Get details about the current context (opportunity, account, or global view). "
-        "Use this when the user asks about 'this opportunity', 'the current account', "
-        "'what am I looking at', or needs information about their current view. "
-        "Returns structured information about the entity being viewed."
+        "Get details about the current context. "
+        "NOTE: In opportunity, account, and product views, the context is already "
+        "provided in your system prompt including all entity IDs. You do NOT need "
+        "to call this tool to get opportunity_id, solution_id, etc. — they are "
+        "already available to you. "
+        "Use this tool ONLY when: (1) you are in global/dashboard mode and need "
+        "to check if context exists, or (2) you suspect the context may have "
+        "changed since the conversation started."
     )
 
     def get_schema(self) -> Dict[str, Dict[str, Any]]:
@@ -83,8 +87,11 @@ class GetCurrentContextTool(LangChainTool):
                     for c in (summary.contacts or [])[:5]
                 ],
                 "solution": {
+                    "id": scope.solution_id,
                     "status": summary.solution_status,
-                    "has_draft": bool(summary.solution_overview)
+                    "version": summary.solution_version if hasattr(summary, 'solution_version') else None,
+                    "has_draft": bool(summary.solution_overview),
+                    "overview_preview": (summary.solution_overview or "")[:200] if summary.solution_overview else None
                 }
             })
 

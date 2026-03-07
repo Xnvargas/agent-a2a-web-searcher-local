@@ -75,9 +75,16 @@ class GetEntityDetailsTool(LangChainTool):
                 result = run_query(f"""
                     SELECT o.id, o.name, o.status, o.value, o.use_case,
                         o.strategy, o.success_criteria, o.classification,
-                        a.name as account_name, a.industry
+                        a.name as account_name, a.industry,
+                        s.id as solution_id, s.status as solution_status,
+                        s.version as solution_version
                     FROM opportunities o
                     JOIN accounts a ON a.id = o.account_id
+                    LEFT JOIN solutions s ON s.opportunity_id = o.id
+                        AND s.version = (
+                            SELECT MAX(version) FROM solutions
+                            WHERE opportunity_id = o.id
+                        )
                     WHERE o.id = '{safe_id}'::uuid
                 """)
 
