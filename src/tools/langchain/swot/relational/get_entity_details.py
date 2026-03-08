@@ -127,8 +127,11 @@ class GetEntityDetailsTool(LangChainTool):
 
             elif entity_type == "solution":
                 result = run_query(f"""
-                    SELECT s.id, s.overview, s.architecture_details, s.implementation_notes,
-                        s.status, s.version,
+                    SELECT s.id, s.status, s.version,
+                        LENGTH(s.overview) as overview_length,
+                        LENGTH(s.architecture_details) as architecture_length,
+                        LENGTH(s.implementation_notes) as implementation_length,
+                        LEFT(s.overview, 200) as overview_preview,
                         o.name as opportunity_name, a.name as account_name
                     FROM solutions s
                     JOIN opportunities o ON o.id = s.opportunity_id
@@ -139,7 +142,15 @@ class GetEntityDetailsTool(LangChainTool):
                 if not result or result.strip() == '' or result.strip() == '[]':
                     return f"Solution not found with ID: {entity_id}"
 
-                return f"Solution details:\n{result}"
+                return (
+                    f"Solution details:\n{result}\n\n"
+                    f"NOTE: Full content of overview, architecture_details, and "
+                    f"implementation_notes is too large to return inline. "
+                    f"To read the full content of a specific field, use:\n"
+                    f"  get_solution_content(solution_id='{entity_id}', field='architecture_details')\n"
+                    f"To update a field, use update_solution() — you can regenerate "
+                    f"content based on the preview and context without reading the full original."
+                )
 
             elif entity_type == "document":
                 result = run_query(f"""
