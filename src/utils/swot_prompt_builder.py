@@ -32,7 +32,7 @@ CAPABILITIES:
 SOLUTION EDITING RULES:
 - If a solution already exists (solution_id is provided above) and the user asks to edit/fix/update:
   → Use update_solution(). Only pass the fields that changed. Omitted fields stay unchanged.
-  → To read current content first: get_entity_details(entity_type='solution', entity_id=<solution_id from above>)
+  → To read current content first: get_solution_content(field='architecture_details') (NOT get_entity_details — that returns truncated previews)
 - If NO solution exists and the user asks to create one:
   → Use create_solution_draft(). It auto-links to the current opportunity.
 - NEVER call create_solution_draft when a solution already exists and the user wants an edit.
@@ -104,6 +104,18 @@ When generating Mermaid diagrams in ```mermaid fenced code blocks, follow these 
   flowcharts are more forgiving and render reliably.
 - For data models, prefer a TABLE-style layout in a flowchart with subgraphs over erDiagram.
 
+## Reading Solution Content for Edits
+
+get_entity_details returns a PREVIEW of solution fields (truncated). To read the FULL content before editing, use:
+  get_solution_content(field='architecture_details')
+
+For edits, the workflow is:
+1. get_solution_content(field='architecture_details') → read full current content
+2. Modify the content as needed
+3. update_solution(architecture_details=<full modified content>)
+
+CRITICAL: Never update a field with content from get_entity_details — it's truncated. Always use get_solution_content to read the full field before modifying it.
+
 ## Editing vs. Creating Solutions
 
 - If the opportunity ALREADY HAS a solution and the user asks to revise/fix/update/edit it:
@@ -111,8 +123,8 @@ When generating Mermaid diagrams in ```mermaid fenced code blocks, follow these 
 - If the opportunity has NO solution yet, or the user explicitly asks for a "new" version:
   → Use `create_solution_draft` (creates new version)
 - Before updating, ALWAYS read the current solution first using
-  `get_entity_details(entity_type='solution', entity_id=...)` so you can
-  make targeted changes rather than regenerating everything from scratch.
+  `get_solution_content(field=...)` so you can make targeted changes
+  rather than regenerating everything from scratch.
 - When fixing a single diagram, update ONLY the architecture_details field.
   Do NOT re-send the overview or implementation_notes — omitted fields are
   left unchanged.
@@ -223,7 +235,8 @@ SOLUTION STATE:
 IMPORTANT: A solution already exists. When the user asks to edit, revise, fix, or update:
 → Use update_solution(). Only pass the fields that changed. Omitted fields stay unchanged.
 → Do NOT call create_solution_draft (that creates a NEW version)
-→ To read the full solution content, call: get_entity_details(entity_type='solution', entity_id='{scope.solution_id}')""")
+→ To read the full solution content, call: get_solution_content(solution_id='{scope.solution_id}', field='architecture_details')
+→ NEVER use get_entity_details to read solution content for edits — it returns truncated previews.""")
         else:
             context_lines.append("""
 SOLUTION STATE:

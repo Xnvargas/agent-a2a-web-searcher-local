@@ -327,6 +327,12 @@ class SWOTContext:
         return ctx.scope.account_id if ctx else None
 
     @staticmethod
+    def get_solution_id() -> Optional[str]:
+        """Convenience method to get solution ID."""
+        ctx = _current_context.get()
+        return ctx.scope.solution_id if ctx else None
+
+    @staticmethod
     def get_product_id() -> Optional[str]:
         """Convenience method to get product ID."""
         ctx = _current_context.get()

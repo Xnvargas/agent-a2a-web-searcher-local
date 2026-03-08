@@ -8,7 +8,7 @@ Context-aware tools for the SWOT application. Each tool:
 2. Registers via ToolRegistry (auto-discovered by agent)
 3. Uses SWOTContext for automatic scope filtering
 
-TOOLS (12 total):
+TOOLS (13 total):
 -----------------
 
 Context:
@@ -27,6 +27,7 @@ Relational (SQLDatabase):
 - query_entities: Search accounts, opportunities, products (NEW)
 - get_entity_details: Get full entity details by ID (NEW)
 - get_document_text: Get full extracted text of a document by ID (NEW)
+- get_solution_content: Get full content of a solution field with pagination (NEW)
 - create_solution_draft: Create a new solution architecture
 - update_solution: Update an existing solution's fields in-place
 - create_document_artifact: Create and save generated content
@@ -54,6 +55,7 @@ from .relational.get_entity_details import GetEntityDetailsTool
 from .relational.create_solution_draft import CreateSolutionDraftTool
 from .relational.update_solution import UpdateSolutionTool
 from .relational.get_document_text import GetDocumentTextTool
+from .relational.get_solution_content import GetSolutionContentTool
 from .relational.create_document_artifact import CreateDocumentArtifactTool
 
 # Register all tools with the registry
@@ -67,11 +69,12 @@ ToolRegistry.register(ExploreRelationshipsTool())
 ToolRegistry.register(QueryEntitiesTool())
 ToolRegistry.register(GetEntityDetailsTool())
 ToolRegistry.register(GetDocumentTextTool())
+ToolRegistry.register(GetSolutionContentTool())
 ToolRegistry.register(CreateSolutionDraftTool())
 ToolRegistry.register(UpdateSolutionTool())
 ToolRegistry.register(CreateDocumentArtifactTool())
 
-print(f"SWOT Tools registered: 12 tools (7 migrated + 5 new)")
+print(f"SWOT Tools registered: 13 tools (7 migrated + 6 new)")
 
 __all__ = [
     'GetCurrentContextTool',
@@ -83,6 +86,7 @@ __all__ = [
     'QueryEntitiesTool',
     'GetEntityDetailsTool',
     'GetDocumentTextTool',
+    'GetSolutionContentTool',
     'CreateSolutionDraftTool',
     'UpdateSolutionTool',
     'CreateDocumentArtifactTool',
