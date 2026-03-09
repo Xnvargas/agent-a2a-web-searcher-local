@@ -131,7 +131,7 @@ def create_orchestrator(
             ],
             "llm_calls": state.get("llm_calls", 0) + 1,
             "total_llm_calls": state.get("total_llm_calls", 0) + 1,
-            "tool_instances": state.get("tool_instances", tool_instances),
+            "tool_instances": tool_instances,
             "tool_attempts": state.get("tool_attempts", {}),
             "summary_of_older_turns": summary if needs_summarization else state.get("summary_of_older_turns"),
         }
@@ -140,7 +140,7 @@ def create_orchestrator(
     async def tool_node(state: dict) -> dict:
         """Execute handoff tools — each creates a specialist sub-graph."""
         result = []
-        instances = state.get("tool_instances", tool_instances)
+        instances = tool_instances
         attempts = dict(state.get("tool_attempts", {}))
 
         last_message = state["messages"][-1]

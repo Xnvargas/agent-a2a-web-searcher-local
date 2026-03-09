@@ -516,13 +516,7 @@ async def Web_Agent(
             {
                 "messages": messages,
                 "llm_calls": 0,
-                "tool_instances": {},
-                "tool_attempts": {},
                 "swot_context": swot_ctx_dict or {},
-                "active_agent": "orchestrator",
-                "handoff_chain": [],
-                "summary_of_older_turns": None,
-                "recent_turn_count": 0,
                 "total_llm_calls": 0,
             },
             config=config,
