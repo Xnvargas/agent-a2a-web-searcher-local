@@ -70,7 +70,8 @@ from agentstack_sdk.a2a.extensions.ui.settings import (
 # -----------------------------------------------------------------------------
 # Import from new modular architecture
 # -----------------------------------------------------------------------------
-from utils import create_langgraph_agent
+from utils import create_langgraph_agent  # Keep for fallback
+from agents import create_orchestrator
 from utils.citations import (
     format_citations_for_beeai,
     format_tool_data_for_logging,
@@ -391,7 +392,7 @@ async def Web_Agent(
     # -------------------------------------------------------------------------
     from tools.langchain.swot.graph_memory import get_graph_memory_tools
 
-# Add to your tool list
+    # Load tools for trajectory reporting (orchestrator manages its own tools internally)
     tools = get_all_tools()
     tools = tools + get_graph_memory_tools()
 
@@ -401,40 +402,50 @@ async def Web_Agent(
     )
 
     # -------------------------------------------------------------------------
-    # Create LangGraph Agent
+    # Create Multi-Agent Orchestrator
     #
-    # EXTENSION POINT: Agent Configuration
-    # You can customize the agent by passing additional parameters:
-    # - system_prompt: Custom system prompt (now built dynamically from SWOT context)
-    # - temperature: LLM temperature
+    # The orchestrator replaces the single-agent pattern. It routes user
+    # intent to specialist agents (Opportunity, Account, Product, Document,
+    # Research, Architect) via handoff tools.
     # -------------------------------------------------------------------------
 
-    # Build dynamic system prompt based on SWOT context
-    system_prompt = build_swot_system_prompt(swot_ctx)
+    # Convert SWOT context to dict for orchestrator
+    swot_ctx_dict = None
+    if swot_ctx:
+        swot_ctx_dict = {
+            "scope": swot_ctx.scope.get_filter_dict() | {"type": swot_ctx.scope.type, "solutionId": swot_ctx.scope.solution_id},
+            "summary": {
+                "entityName": swot_ctx.summary.entity_name,
+                "entityType": swot_ctx.summary.entity_type,
+                "accountName": swot_ctx.summary.account_name,
+                "industry": swot_ctx.summary.industry,
+                "segment": swot_ctx.summary.segment,
+                "status": swot_ctx.summary.status,
+                "classification": swot_ctx.summary.classification,
+                "useCase": swot_ctx.summary.use_case,
+                "strategy": swot_ctx.summary.strategy,
+                "successCriteria": swot_ctx.summary.success_criteria,
+                "products": swot_ctx.summary.products or [],
+                "contacts": swot_ctx.summary.contacts or [],
+                "technologyFootprint": swot_ctx.summary.technology_footprint or [],
+                "teamMembers": swot_ctx.summary.team_members or [],
+                "solutionOverview": swot_ctx.summary.solution_overview,
+                "solutionStatus": swot_ctx.summary.solution_status,
+            },
+        }
+
+    # Strip /v1 suffix for Ollama native API
+    ollama_base_url = api_base.rstrip('/').replace('/v1', '')
+
+    agent = create_orchestrator(
+        swot_context=swot_ctx_dict,
+        api_base=ollama_base_url,
+    )
 
     yield trajectory.trajectory_metadata(
-        title="System Prompt Built",
-        content=f"Mode: {swot_ctx.scope.type if swot_ctx else 'global'}"
+        title="Multi-Agent Orchestrator Created",
+        content=f"Mode: {swot_ctx.scope.type if swot_ctx else 'global'}\nAgents: Orchestrator -> Opportunity, Account, Product, Document, Research, Architect"
     )
-
-    # Create LangGraph Agent with context-aware prompt
-    # SWOT tools are auto-registered via ToolRegistry
-    agent = create_langgraph_agent(
-        api_model=api_model,
-        api_key=api_key,
-        api_base=api_base,
-        tools=tools,  # Includes SWOT tools automatically
-        system_prompt=system_prompt,  # Dynamic prompt based on context
-        # temperature=0.1,
-    )
-
-    # -------------------------------------------------------------------------
-    # Thinking Mode (using value set in Settings Validation above)
-    # -------------------------------------------------------------------------
-    # if is_thinking_enabled:
-    #     yield "Thinking mode is enabled - I'll show my reasoning process.\n"
-    # else:
-    #     yield "Thinking mode is disabled - I'll provide direct responses.\n"
 
     # -------------------------------------------------------------------------
     # Execute Agent
@@ -442,8 +453,8 @@ async def Web_Agent(
     messages = langchain_messages + [HumanMessage(content=current_message)]
 
     yield trajectory.trajectory_metadata(
-        title="Starting LangGraph Agent with Modular Tools",
-        content=f"Passing {len(messages)} messages to agent (including {len(langchain_messages)} history messages)\nTools: {len(tools)}"
+        title="Starting Multi-Agent Orchestrator",
+        content=f"Passing {len(messages)} messages to orchestrator (including {len(langchain_messages)} history messages)"
     )
 
     # Track tool executions and citations
@@ -505,7 +516,14 @@ async def Web_Agent(
             {
                 "messages": messages,
                 "llm_calls": 0,
-                "tool_instances": {t.name: t for t in tools}
+                "tool_instances": {},
+                "tool_attempts": {},
+                "swot_context": swot_ctx_dict or {},
+                "active_agent": "orchestrator",
+                "handoff_chain": [],
+                "summary_of_older_turns": None,
+                "recent_turn_count": 0,
+                "total_llm_calls": 0,
             },
             config=config,
             stream_mode="messages",  # KEY: enables token-level streaming
