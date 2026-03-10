@@ -139,6 +139,8 @@ def create_orchestrator(
     # ── Node: Tool execution (handoff dispatch) ──
     async def tool_node(state: dict) -> dict:
         """Execute handoff tools — each creates a specialist sub-graph."""
+        import hashlib
+
         result = []
         instances = state.get("tool_instances") or tool_instances
         attempts = dict(state.get("tool_attempts", {}))
@@ -146,6 +148,16 @@ def create_orchestrator(
         last_message = state["messages"][-1]
         if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
             return {"messages": result, "tool_attempts": attempts}
+
+        # Track duplicate handoff calls
+        previous_call_sigs = set()
+        for msg in state.get("messages", []):
+            if hasattr(msg, "tool_calls") and msg.tool_calls:
+                for prev_tc in msg.tool_calls:
+                    sig = hashlib.md5(
+                        f"{prev_tc['name']}:{json.dumps(prev_tc['args'], sort_keys=True)}".encode()
+                    ).hexdigest()
+                    previous_call_sigs.add(sig)
 
         print(f"\n{'='*60}")
         print(f"  ORCHESTRATOR TOOL NODE: {len(last_message.tool_calls)} handoff(s)")
@@ -158,6 +170,21 @@ def create_orchestrator(
 
             print(f"\n  Handoff: {tool_name}")
             print(f"  Args: {json.dumps(tool_args, indent=2)[:500]}")
+
+            # Check for duplicate handoff call
+            call_sig = hashlib.md5(
+                f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}".encode()
+            ).hexdigest()
+            if call_sig in previous_call_sigs:
+                dup_msg = (
+                    f"This exact handoff ({tool_name}) was already executed with "
+                    f"identical arguments. Use the previous result to formulate "
+                    f"your response — do NOT retry the same handoff."
+                )
+                print(f"  DUPLICATE HANDOFF DETECTED: {tool_name} — skipping")
+                result.append(ToolMessage(content=dup_msg, tool_call_id=tool_call_id, name=tool_name))
+                continue
+            previous_call_sigs.add(call_sig)
 
             # Check retry limit
             current_failures = attempts.get(tool_name, 0)

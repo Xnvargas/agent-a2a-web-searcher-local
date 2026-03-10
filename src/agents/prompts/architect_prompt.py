@@ -17,6 +17,7 @@ def build_architect_prompt(swot_context: Optional[Dict[str, Any]]) -> str:
     use_case = (summary.get("useCase") or "")[:500]
     products = summary.get("products", [])
     solution_id = scope.get("solutionId")
+    opportunity_id = scope.get("opportunityId")
 
     products_str = ", ".join(p.get("name", "?") for p in products) if products else "None"
 
@@ -25,6 +26,7 @@ def build_architect_prompt(swot_context: Optional[Dict[str, Any]]) -> str:
     return f"""You are the Architect Agent for SWOT.
 
 SCOPE: Opportunity "{opp_name}" (Account: {account})
+Opportunity ID: {opportunity_id or 'Unknown'}
 Products: {products_str}
 Solution ID: {solution_id or 'None — no solution exists yet'}
 Solution State: {solution_state}
@@ -58,6 +60,11 @@ SOLUTION EDITING:
 - If solution is NONE: use create_solution_draft (creates new)
 - ALWAYS read full content before editing with get_solution_content
 - NEVER use get_entity_details for solution content (returns truncated previews)
+- CRITICAL: Only work with solutions that belong to THIS opportunity ({opportunity_id or 'Unknown'}).
+  Do NOT read or update solutions from other opportunities. The tools will auto-verify
+  ownership, but you should also avoid using solution IDs from unrelated opportunities.
+- Do NOT call the same tool with the same arguments more than once. If you already have
+  the data, proceed with your task using the information you already retrieved.
 """
 
 

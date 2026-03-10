@@ -104,6 +104,45 @@ class UpdateSolutionTool(LangChainTool):
                     "to the current opportunity. Use create_solution_draft to create one first."
                 )
 
+            # Verify solution belongs to current opportunity (prevent cross-opp writes)
+            opp_id = SWOTContext.get_opportunity_id()
+            if opp_id and target_id:
+                verify_result = run_query(
+                    f"SELECT opportunity_id FROM solutions WHERE id = '{target_id}'::uuid"
+                )
+                if verify_result:
+                    solution_opp_match = re.search(
+                        r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
+                        verify_result
+                    )
+                    if solution_opp_match and solution_opp_match.group(0) != opp_id:
+                        wrong_opp = solution_opp_match.group(0)
+                        print(
+                            f"  WARNING: Solution {target_id} belongs to opportunity "
+                            f"{wrong_opp}, not current opportunity {opp_id}. "
+                            f"Redirecting to correct opportunity's solution."
+                        )
+                        # Find the correct solution for current opportunity
+                        correct_result = run_query(
+                            f"SELECT id FROM solutions "
+                            f"WHERE opportunity_id = '{opp_id}'::uuid "
+                            f"ORDER BY version DESC LIMIT 1"
+                        )
+                        correct_match = re.search(
+                            r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
+                            correct_result or ''
+                        )
+                        if correct_match:
+                            target_id = correct_match.group(0)
+                            print(f"  Redirected to solution {target_id} for opportunity {opp_id}")
+                        else:
+                            return (
+                                f"Solution {target_id} belongs to a different opportunity "
+                                f"({wrong_opp}), not the current one ({opp_id}). "
+                                f"No solution exists for the current opportunity. "
+                                f"Use create_solution_draft to create one first."
+                            )
+
             # Validate and fix Mermaid diagrams in provided fields
             mermaid_notes = []
 
