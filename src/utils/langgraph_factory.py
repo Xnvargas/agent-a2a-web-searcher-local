@@ -290,14 +290,27 @@ def create_langgraph_agent(
     
     async def tool_node(state: dict) -> dict:
         """
-        Tool execution node with per-tool retry tracking.
+        Tool execution node with per-tool retry tracking and duplicate detection.
 
         After MAX_TOOL_ATTEMPTS consecutive failures for the same tool,
         returns a blocking message instead of executing again.
+        Detects duplicate tool calls (same name + args) to prevent infinite loops.
         """
+        import hashlib
+
         result = []
         instances = state.get("tool_instances", tool_instances)
         attempts = dict(state.get("tool_attempts", {}))
+
+        # Track duplicate tool calls across conversation history
+        previous_call_sigs = set()
+        for msg in state.get("messages", []):
+            if hasattr(msg, "tool_calls") and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    sig = hashlib.md5(
+                        f"{tc['name']}:{json.dumps(tc['args'], sort_keys=True)}".encode()
+                    ).hexdigest()
+                    previous_call_sigs.add(sig)
 
         last_message = state['messages'][-1]
         num_tool_calls = (
@@ -341,6 +354,26 @@ def create_langgraph_agent(
                     name=tool_name
                 ))
                 continue
+
+            # -- Check for duplicate tool call (same name + args already called) --
+            call_sig = hashlib.md5(
+                f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}".encode()
+            ).hexdigest()
+            if call_sig in previous_call_sigs:
+                dup_msg = (
+                    f"This exact tool call ({tool_name}) was already made with "
+                    f"identical arguments. The data has not changed. "
+                    f"Proceed with the information you already have — "
+                    f"do NOT call this tool again with the same arguments."
+                )
+                print(f"\n🔁 DUPLICATE DETECTED: {tool_name} with same args — skipping execution")
+                result.append(ToolMessage(
+                    content=dup_msg,
+                    tool_call_id=tool_call_id,
+                    name=tool_name
+                ))
+                continue
+            previous_call_sigs.add(call_sig)
 
             # -- Look up tool instance --
             tool_instance = instances.get(tool_name)

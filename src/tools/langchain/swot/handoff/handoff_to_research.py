@@ -21,7 +21,7 @@ class HandoffToResearchTool(LangChainTool):
         }
 
     async def execute(self, user_message: str) -> str:
-        from agents.base import create_specialist_agent, MODEL_LIGHTWEIGHT
+        from agents.base import create_specialist_agent, MODEL_REASONING
         from agents.prompts.research_prompt import build_research_prompt
         from agents.tool_sets import get_research_tools
         from agents.history import build_specialist_briefing
@@ -38,7 +38,7 @@ class HandoffToResearchTool(LangChainTool):
             agent_name="research",
             tools=research_tools,
             system_prompt=prompt,
-            model=MODEL_LIGHTWEIGHT,
+            model=MODEL_REASONING,
             recursion_limit=10,
         )
 

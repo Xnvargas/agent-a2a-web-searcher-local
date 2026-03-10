@@ -8,7 +8,7 @@ Context-aware tools for the SWOT application. Each tool:
 2. Registers via ToolRegistry (auto-discovered by agent)
 3. Uses SWOTContext for automatic scope filtering
 
-TOOLS (13 total):
+TOOLS (19 total):
 -----------------
 
 Context:
@@ -21,16 +21,24 @@ Vector (AgentEmbedder + SQLDatabase):
 Graph (AGEGraph):
 - get_technology_footprint: Get IBM tech deployed at an account
 - query_coverage: Find who covers a product for an account
-- explore_relationships: Flexible graph exploration (NEW)
+- explore_relationships: Flexible graph exploration
 
 Relational (SQLDatabase):
-- query_entities: Search accounts, opportunities, products (NEW)
-- get_entity_details: Get full entity details by ID (NEW)
-- get_document_text: Get full extracted text of a document by ID (NEW)
-- get_solution_content: Get full content of a solution field with pagination (NEW)
+- query_entities: Search accounts, opportunities, products
+- get_entity_details: Get full entity details by ID
+- get_document_text: Get full extracted text of a document by ID
+- get_solution_content: Get full content of a solution field with pagination
 - create_solution_draft: Create a new solution architecture
 - update_solution: Update an existing solution's fields in-place
 - create_document_artifact: Create and save generated content
+
+Graph Memory (agent_memory_nodes + AGE graph):
+- add_memory: Create a memory node, optionally linked to an entity
+- search_memory: Semantic/filtered search across memories
+- link_memories: Create RELATES_TO or ABOUT edges in the graph
+- update_memory: Edit content, confidence, type, tags
+- delete_memory: Soft-delete with graph cleanup
+- get_entity_memory: Graph traversal to find all memories about an entity
 
 =============================================================================
 """
@@ -74,7 +82,19 @@ ToolRegistry.register(CreateSolutionDraftTool())
 ToolRegistry.register(UpdateSolutionTool())
 ToolRegistry.register(CreateDocumentArtifactTool())
 
-print(f"SWOT Tools registered: 13 tools (7 migrated + 6 new)")
+# Graph Memory tools (agent_memory_nodes + AGE graph)
+from .graph_memory import (
+    AddMemoryTool, SearchMemoryTool, LinkMemoriesTool,
+    UpdateMemoryTool, DeleteMemoryTool, GetEntityMemoryTool,
+)
+ToolRegistry.register(AddMemoryTool())
+ToolRegistry.register(SearchMemoryTool())
+ToolRegistry.register(LinkMemoriesTool())
+ToolRegistry.register(UpdateMemoryTool())
+ToolRegistry.register(DeleteMemoryTool())
+ToolRegistry.register(GetEntityMemoryTool())
+
+print(f"SWOT Tools registered: 19 tools (13 core + 6 graph memory)")
 
 __all__ = [
     'GetCurrentContextTool',
@@ -90,4 +110,10 @@ __all__ = [
     'CreateSolutionDraftTool',
     'UpdateSolutionTool',
     'CreateDocumentArtifactTool',
+    'AddMemoryTool',
+    'SearchMemoryTool',
+    'LinkMemoriesTool',
+    'UpdateMemoryTool',
+    'DeleteMemoryTool',
+    'GetEntityMemoryTool',
 ]

@@ -99,6 +99,43 @@ class GetSolutionContentTool(LangChainTool):
             if not target_id:
                 return "No solution found in context. Provide a solution_id."
 
+            # Verify solution belongs to current opportunity (prevent cross-opp reads)
+            opp_id = SWOTContext.get_opportunity_id()
+            if opp_id and target_id:
+                verify_result = run_query(
+                    f"SELECT opportunity_id FROM solutions WHERE id = '{target_id}'::uuid"
+                )
+                if verify_result:
+                    solution_opp_match = re.search(
+                        r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
+                        verify_result
+                    )
+                    if solution_opp_match and solution_opp_match.group(0) != opp_id:
+                        wrong_opp = solution_opp_match.group(0)
+                        print(
+                            f"  WARNING: Solution {target_id} belongs to opportunity "
+                            f"{wrong_opp}, not current opportunity {opp_id}. "
+                            f"Redirecting to correct opportunity's solution."
+                        )
+                        correct_result = run_query(
+                            f"SELECT id FROM solutions "
+                            f"WHERE opportunity_id = '{opp_id}'::uuid "
+                            f"ORDER BY version DESC LIMIT 1"
+                        )
+                        correct_match = re.search(
+                            r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
+                            correct_result or ''
+                        )
+                        if correct_match:
+                            target_id = correct_match.group(0)
+                            print(f"  Redirected to solution {target_id} for opportunity {opp_id}")
+                        else:
+                            return (
+                                f"No solution exists for the current opportunity ({opp_id}). "
+                                f"The provided solution_id belongs to a different opportunity. "
+                                f"Use create_solution_draft to create one first."
+                            )
+
             safe_id = target_id.replace("'", "''")
             offset = max(0, offset)
 
