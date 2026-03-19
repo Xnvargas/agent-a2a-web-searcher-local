@@ -149,9 +149,9 @@ def create_orchestrator(
         if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
             return {"messages": result, "tool_attempts": attempts}
 
-        # Track duplicate handoff calls
+        # Track duplicate handoff calls (exclude the current message)
         previous_call_sigs = set()
-        for msg in state.get("messages", []):
+        for msg in state.get("messages", [])[:-1]:
             if hasattr(msg, "tool_calls") and msg.tool_calls:
                 for prev_tc in msg.tool_calls:
                     sig = hashlib.md5(
