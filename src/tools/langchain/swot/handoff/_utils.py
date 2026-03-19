@@ -27,6 +27,19 @@ def extract_final_response(messages: list) -> str:
                 continue
             return content
 
+    # Check if terminated by circuit breaker (consecutive duplicate tool calls)
+    recent_tool_msgs = [
+        m for m in messages[-6:]
+        if hasattr(m, "type") and m.type == "tool"
+    ]
+    if recent_tool_msgs and all("DUPLICATE BLOCKED" in str(m.content) for m in recent_tool_msgs):
+        return (
+            "The architect agent was unable to complete the update due to a processing loop. "
+            "The solution content was read successfully but no changes were saved. "
+            "Please try again — consider being more specific about what to change "
+            "(e.g., 'add a Mermaid diagram showing X, Y, and Z components')."
+        )
+
     # Fallback: check if the last message is a ToolMessage with useful content
     last = messages[-1]
     if hasattr(last, "type") and last.type == "tool" and last.content:

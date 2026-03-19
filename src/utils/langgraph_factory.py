@@ -366,10 +366,11 @@ def create_langgraph_agent(
             ).hexdigest()
             if call_sig in previous_call_sigs:
                 dup_msg = (
-                    f"This exact tool call ({tool_name}) was already made with "
-                    f"identical arguments. The data has not changed. "
-                    f"Proceed with the information you already have — "
-                    f"do NOT call this tool again with the same arguments."
+                    f"DUPLICATE BLOCKED: {tool_name} was already called with these exact arguments. "
+                    f"You already have this data. STOP reading and move to the next step: "
+                    f"call a WRITE tool (update_solution, create_solution_draft, or similar) "
+                    f"with your composed content, or produce your final response. "
+                    f"Do NOT call any read/get tool again."
                 )
                 print(f"\n🔁 DUPLICATE DETECTED: {tool_name} with same args — skipping execution")
                 result.append(ToolMessage(
@@ -477,6 +478,31 @@ def create_langgraph_agent(
                     name=tool_name
                 ))
 
+        # -- Pre-circuit-breaker nudge: if ALL calls in this batch were duplicates,
+        # append a strong directive to the last message to force the LLM forward --
+        all_duplicates = (
+            len(result) > 0
+            and all("DUPLICATE BLOCKED" in str(r.content) for r in result)
+        )
+        if all_duplicates and result:
+            nudge = (
+                "\n\n=== SYSTEM WARNING ===\n"
+                "You have repeatedly called the same read tools. You already have ALL the data. "
+                "On your NEXT turn you MUST either:\n"
+                "  1. Call update_solution with the complete combined content, OR\n"
+                "  2. Call create_solution_draft if no solution exists, OR\n"
+                "  3. Produce your final text response.\n"
+                "If you call another read/get tool, the system will TERMINATE your session.\n"
+                "=== END WARNING ==="
+            )
+            last_tool_msg = result[-1]
+            result[-1] = ToolMessage(
+                content=str(last_tool_msg.content) + nudge,
+                tool_call_id=last_tool_msg.tool_call_id,
+                name=last_tool_msg.name,
+            )
+            print(f"\n⚠️  PRE-BREAKER NUDGE: All {len(result)} tool calls were duplicates — injecting directive")
+
         print(f"\n{'='*80}")
         print(f"🔄 TOOL NODE SUMMARY:")
         print(f"   - Processed: {len(result)} tool call(s)")
@@ -513,7 +539,7 @@ def create_langgraph_agent(
         consecutive_dups = 0
         for msg in reversed(messages[:-1]):
             if hasattr(msg, 'type') and msg.type == 'tool':
-                if 'identical arguments' in str(msg.content):
+                if 'DUPLICATE BLOCKED' in str(msg.content):
                     consecutive_dups += 1
                 else:
                     break
