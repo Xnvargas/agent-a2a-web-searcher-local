@@ -159,6 +159,10 @@ def create_orchestrator(
                     ).hexdigest()
                     previous_call_sigs.add(sig)
 
+        # Propagate conversation summary so handoff tools can brief specialists
+        from utils.conversation_context import ConversationContext
+        ConversationContext.set_summary(state.get("summary_of_older_turns"))
+
         print(f"\n{'='*60}")
         print(f"  ORCHESTRATOR TOOL NODE: {len(last_message.tool_calls)} handoff(s)")
         print(f"{'='*60}")

@@ -123,8 +123,11 @@ CRITICAL: Never update a field with content from get_entity_details — it's tru
 - If the opportunity has NO solution yet, or the user explicitly asks for a "new" version:
   → Use `create_solution_draft` (creates new version)
 - Before updating, ALWAYS read the current solution first using
-  `get_solution_content(field=...)` so you can make targeted changes
-  rather than regenerating everything from scratch.
+  `get_solution_content(field=...)`.
+- CRITICAL: `update_solution` REPLACES the entire field value you provide.
+  To make additive changes (adding sections, diagrams, or content), you MUST
+  include ALL existing content along with your additions. Never submit partial
+  content that omits existing sections — this destroys the user's prior work.
 - When fixing a single diagram, update ONLY the architecture_details field.
   Do NOT re-send the overview or implementation_notes — omitted fields are
   left unchanged.

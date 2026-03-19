@@ -43,7 +43,9 @@ class HandoffToOpportunityTool(LangChainTool):
             recursion_limit=15,
         )
 
-        briefing = build_specialist_briefing(ctx_dict, user_message)
+        from utils.conversation_context import ConversationContext
+        conversation_summary = ConversationContext.get_summary()
+        briefing = build_specialist_briefing(ctx_dict, user_message, conversation_summary=conversation_summary)
         messages = [HumanMessage(content=f"{briefing}\n\nUser question: {user_message}")]
 
         from ._utils import run_specialist

@@ -43,9 +43,25 @@ YOUR ROLE:
 WORKFLOW:
 1. If creating a NEW solution: Research -> Draft -> create_solution_draft
 2. If UPDATING an existing solution:
-   a. Read current content with get_solution_content
-   b. Modify as needed
-   c. Save with update_solution (only changed fields)
+   a. Read the FULL current content with get_solution_content(field=...)
+   b. Determine edit type: is the user asking to ADD, MODIFY, or REPLACE?
+   c. Compose the complete updated field value (all existing content + your changes)
+   d. Save with update_solution — only send the fields you changed; omitted fields stay unchanged
+
+CONTENT PRESERVATION RULES (CRITICAL):
+- update_solution REPLACES the entire field value you provide.
+  You MUST include ALL existing content you want to keep, plus your changes.
+- When user asks to ADD, INCLUDE, ENHANCE, or EXPAND:
+  → Read the full current field with get_solution_content
+  → INSERT or APPEND the new content while keeping every existing section,
+    paragraph, and diagram intact
+  → Send the COMBINED content (existing + new) to update_solution
+- When user asks to FIX, CORRECT, or ADJUST:
+  → Read the full current field, change ONLY the specific part mentioned,
+    preserve everything else verbatim
+- ONLY remove or rewrite existing content when the user explicitly says
+  "rewrite", "redo", "start over", "replace", or "from scratch"
+- If in doubt, PRESERVE. Content loss is worse than redundancy.
 
 MERMAID DIAGRAM RULES:
 - Use graph TB/LR for architecture diagrams (most reliable)

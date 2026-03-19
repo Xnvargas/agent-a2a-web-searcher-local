@@ -109,7 +109,7 @@ def build_specialist_briefing(
         briefing += "."
 
     if conversation_summary:
-        briefing += f" Previous discussion context: {conversation_summary[:200]}"
+        briefing += f" Previous discussion context: {conversation_summary[:500]}"
 
     return briefing
 
