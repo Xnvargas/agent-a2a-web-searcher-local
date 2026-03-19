@@ -51,10 +51,31 @@ def apply_sliding_window(
         kept.insert(0, msg)
         running_tokens += msg_tokens
 
-    # The dropped turns need to be summarized
+    # Build a lightweight summary of dropped turns so context isn't silently lost
     dropped_count = len(messages) - len(kept)
+    if dropped_count > 0:
+        dropped = messages[:dropped_count]
+        # Extract key info from dropped messages for a compact summary
+        user_topics = []
+        for msg in dropped:
+            role = getattr(msg, "type", None) or getattr(msg, "role", None)
+            if role in ("human", "user"):
+                content = str(getattr(msg, "content", ""))[:150]
+                if content:
+                    user_topics.append(content)
 
-    return kept, existing_summary, dropped_count > 0
+        summary_parts = []
+        if existing_summary:
+            summary_parts.append(existing_summary)
+        topic_preview = "; ".join(user_topics[:3])
+        summary_parts.append(
+            f"[{dropped_count} earlier messages dropped from context. "
+            f"User topics covered: {topic_preview or 'N/A'}]"
+        )
+        updated_summary = " ".join(summary_parts)
+        return kept, updated_summary, True
+
+    return kept, existing_summary, False
 
 
 def build_specialist_briefing(
