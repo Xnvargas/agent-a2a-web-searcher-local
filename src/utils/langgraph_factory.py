@@ -303,8 +303,9 @@ def create_langgraph_agent(
         attempts = dict(state.get("tool_attempts", {}))
 
         # Track duplicate tool calls across conversation history
+        # Exclude the current (last) message to avoid matching against itself
         previous_call_sigs = set()
-        for msg in state.get("messages", []):
+        for msg in state.get("messages", [])[:-1]:
             if hasattr(msg, "tool_calls") and msg.tool_calls:
                 for tc in msg.tool_calls:
                     sig = hashlib.md5(

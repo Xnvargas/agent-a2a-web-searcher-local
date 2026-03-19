@@ -213,9 +213,13 @@ def create_orchestrator(
                 else:
                     attempts[tool_name] = 0
 
-                # Truncate if needed
-                if len(raw) > MAX_TOOL_RESULT_CHARS:
-                    content = raw[:MAX_TOOL_RESULT_CHARS] + f"\n\n[...truncated at {MAX_TOOL_RESULT_CHARS} chars]"
+                # Handoff tools return curated specialist responses —
+                # use a higher limit to avoid losing architecture detail
+                is_handoff = tool_name.startswith("handoff_to_")
+                char_limit = 12000 if is_handoff else MAX_TOOL_RESULT_CHARS
+
+                if len(raw) > char_limit:
+                    content = raw[:char_limit] + f"\n\n[...truncated at {char_limit} chars]"
                 else:
                     content = raw
 

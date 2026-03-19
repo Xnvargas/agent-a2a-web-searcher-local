@@ -46,11 +46,10 @@ class HandoffToArchitectTool(LangChainTool):
         briefing = build_specialist_briefing(ctx_dict, user_message)
         messages = [HumanMessage(content=f"{briefing}\n\nUser question: {user_message}")]
 
-        result = await agent.ainvoke(
-            {"messages": messages, "llm_calls": 0, "tool_instances": {t.name: t for t in arch_tools}, "tool_attempts": {}}
+        from ._utils import run_specialist
+        return await run_specialist(
+            agent, messages, {t.name: t for t in arch_tools}, "architect"
         )
-
-        return _extract_final_response(result["messages"])
 
     def get_langchain_tool(self):
         @tool
@@ -76,8 +75,3 @@ def _context_to_dict(ctx) -> dict:
     }
 
 
-def _extract_final_response(messages: list) -> str:
-    for msg in reversed(messages):
-        if hasattr(msg, "type") and msg.type == "ai" and msg.content:
-            return str(msg.content)
-    return "No response from specialist agent."
