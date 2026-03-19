@@ -49,7 +49,8 @@ class HandoffToDocumentTool(LangChainTool):
 
         from ._utils import run_specialist
         return await run_specialist(
-            agent, messages, {t.name: t for t in doc_tools}, "document"
+            agent, messages, {t.name: t for t in doc_tools}, "document",
+            recursion_limit=10,
         )
 
     def get_langchain_tool(self):

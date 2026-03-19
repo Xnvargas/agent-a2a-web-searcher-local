@@ -49,7 +49,8 @@ class HandoffToResearchTool(LangChainTool):
 
         from ._utils import run_specialist
         return await run_specialist(
-            agent, messages, {t.name: t for t in research_tools}, "research"
+            agent, messages, {t.name: t for t in research_tools}, "research",
+            recursion_limit=10,
         )
 
     def get_langchain_tool(self):

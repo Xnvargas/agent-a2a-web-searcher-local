@@ -38,7 +38,7 @@ def extract_final_response(messages: list) -> str:
     return "No response from specialist agent."
 
 
-async def run_specialist(agent, messages: list, tool_instances: dict, agent_name: str) -> str:
+async def run_specialist(agent, messages: list, tool_instances: dict, agent_name: str, recursion_limit: int = 25) -> str:
     """
     Invoke a specialist agent with error handling.
 
@@ -46,7 +46,8 @@ async def run_specialist(agent, messages: list, tool_instances: dict, agent_name
     """
     try:
         result = await agent.ainvoke(
-            {"messages": messages, "llm_calls": 0, "tool_instances": tool_instances, "tool_attempts": {}}
+            {"messages": messages, "llm_calls": 0, "tool_instances": tool_instances, "tool_attempts": {}},
+            config={"recursion_limit": recursion_limit},
         )
         return extract_final_response(result["messages"])
     except Exception as e:

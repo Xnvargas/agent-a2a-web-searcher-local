@@ -245,9 +245,31 @@ def create_orchestrator(
     def should_continue(state: MultiAgentState) -> Literal["tool_node", "__end__"]:
         messages = state["messages"]
         last_message = messages[-1]
-        if hasattr(last_message, "tool_calls") and last_message.tool_calls:
-            return "tool_node"
-        return END
+
+        if not (hasattr(last_message, "tool_calls") and last_message.tool_calls):
+            return END
+
+        # Circuit breaker: if the last N tool messages were all duplicates, stop
+        consecutive_dups = 0
+        for msg in reversed(messages[:-1]):
+            if hasattr(msg, "type") and msg.type == "tool":
+                if "identical arguments" in str(msg.content):
+                    consecutive_dups += 1
+                else:
+                    break
+            elif hasattr(msg, "type") and msg.type == "ai":
+                if consecutive_dups > 0:
+                    continue
+                else:
+                    break
+            else:
+                break
+
+        if consecutive_dups >= 3:
+            print(f"⚡ ORCHESTRATOR CIRCUIT BREAKER: {consecutive_dups} consecutive duplicate handoffs — forcing END")
+            return END
+
+        return "tool_node"
 
     # ── Build graph ──
     graph = StateGraph(MultiAgentState)

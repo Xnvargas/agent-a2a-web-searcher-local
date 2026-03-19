@@ -50,7 +50,8 @@ class HandoffToOpportunityTool(LangChainTool):
 
         from ._utils import run_specialist
         return await run_specialist(
-            agent, messages, {t.name: t for t in opp_tools}, "opportunity"
+            agent, messages, {t.name: t for t in opp_tools}, "opportunity",
+            recursion_limit=15,
         )
 
     def get_langchain_tool(self):

@@ -50,7 +50,8 @@ class HandoffToArchitectTool(LangChainTool):
 
         from ._utils import run_specialist
         return await run_specialist(
-            agent, messages, {t.name: t for t in arch_tools}, "architect"
+            agent, messages, {t.name: t for t in arch_tools}, "architect",
+            recursion_limit=20,
         )
 
     def get_langchain_tool(self):

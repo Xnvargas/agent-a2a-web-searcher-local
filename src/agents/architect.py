@@ -84,7 +84,8 @@ async def run_architect_workflow(
             "llm_calls": 0,
             "tool_instances": {t.name: t for t in arch_tools},
             "tool_attempts": {},
-        }
+        },
+        config={"recursion_limit": 20},
     )
 
     # Extract final response

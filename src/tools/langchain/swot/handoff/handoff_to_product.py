@@ -50,7 +50,8 @@ class HandoffToProductTool(LangChainTool):
 
         from ._utils import run_specialist
         return await run_specialist(
-            agent, messages, {t.name: t for t in product_tools}, "product"
+            agent, messages, {t.name: t for t in product_tools}, "product",
+            recursion_limit=10,
         )
 
     def get_langchain_tool(self):
