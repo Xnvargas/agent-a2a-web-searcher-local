@@ -32,13 +32,14 @@ class UpdateSolutionTool(LangChainTool):
 
     name = "update_solution"
     description = (
-        "Update an existing solution architecture. Use this to revise, correct, "
-        "or enhance a solution that already exists. Can update overview, "
+        "Update an existing solution architecture. Can update overview, "
         "architecture_details, and/or implementation_notes independently — "
         "fields not provided are left unchanged. "
-        "IMPORTANT: Before updating, read the current solution with "
-        "get_entity_details(entity_type='solution', entity_id=...) so you "
-        "know what's already there and can make targeted edits."
+        "WARNING: Each provided field REPLACES the entire stored value. "
+        "To make additive edits, first read the current content with "
+        "get_solution_content(field=...), then include ALL existing content "
+        "plus your changes in the parameter. Never use get_entity_details "
+        "for reading solution content — it returns truncated previews."
     )
 
     def get_schema(self) -> Dict[str, Dict[str, Any]]:
@@ -54,17 +55,32 @@ class UpdateSolutionTool(LangChainTool):
             "overview": {
                 "type": "string",
                 "required": False,
-                "description": "Updated overview (replaces entire field). Omit to leave unchanged."
+                "description": (
+                    "Full replacement value for overview. WARNING: This overwrites the entire field. "
+                    "To make additive edits, first read the current content with "
+                    "get_solution_content(field='overview'), then include ALL existing content "
+                    "plus your changes. Omit to leave unchanged."
+                )
             },
             "architecture_details": {
                 "type": "string",
                 "required": False,
-                "description": "Updated architecture details (replaces entire field). Omit to leave unchanged."
+                "description": (
+                    "Full replacement value for architecture_details. WARNING: This overwrites the entire field. "
+                    "To make additive edits, first read the current content with "
+                    "get_solution_content(field='architecture_details'), then include ALL existing content "
+                    "plus your changes. Omit to leave unchanged."
+                )
             },
             "implementation_notes": {
                 "type": "string",
                 "required": False,
-                "description": "Updated implementation notes (replaces entire field). Omit to leave unchanged."
+                "description": (
+                    "Full replacement value for implementation_notes. WARNING: This overwrites the entire field. "
+                    "To make additive edits, first read the current content with "
+                    "get_solution_content(field='implementation_notes'), then include ALL existing content "
+                    "plus your changes. Omit to leave unchanged."
+                )
             }
         }
 
