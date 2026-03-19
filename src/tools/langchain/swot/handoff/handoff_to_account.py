@@ -50,7 +50,8 @@ class HandoffToAccountTool(LangChainTool):
 
         from ._utils import run_specialist
         return await run_specialist(
-            agent, messages, {t.name: t for t in account_tools}, "account"
+            agent, messages, {t.name: t for t in account_tools}, "account",
+            recursion_limit=10,
         )
 
     def get_langchain_tool(self):

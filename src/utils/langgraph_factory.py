@@ -80,6 +80,10 @@ MAX_TOOL_ATTEMPTS = 3
 # Maximum characters for error messages sent TO the agent (not logs).
 MAX_ERROR_MSG_CHARS = 300
 
+# Maximum consecutive duplicate tool results before forcing the agent to stop.
+# Prevents infinite loops when the LLM ignores "already called" feedback.
+MAX_CONSECUTIVE_DUPLICATES = 3
+
 
 # =============================================================================
 # STATE SCHEMA
@@ -490,24 +494,42 @@ def create_langgraph_agent(
     def should_continue(state: MessagesState) -> Literal["tool_node", END]:
         """
         Routing logic: Determines next step after LLM response.
-        
+
         Checks if the last message contains tool_calls:
         - If yes: Route to tool_node to execute tools, then back to llm_call
         - If no: Route to END (return response to user)
-        
-        Extension Point:
-            Add additional routing logic here, such as:
-            - Max tool calls check
-            - Specific tool result handling
-            - Error recovery routing
+
+        Includes a circuit breaker: if the last N consecutive tool messages
+        were all duplicates, forces END to prevent infinite loops.
         """
         messages = state["messages"]
         last_message = messages[-1]
-        
-        if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
-            return "tool_node"  # Execute tools and loop back to LLM
-        
-        return END  # No tools needed, return response to user
+
+        if not (hasattr(last_message, 'tool_calls') and last_message.tool_calls):
+            return END
+
+        # Circuit breaker: count consecutive duplicate tool results
+        # walking backwards through message history
+        consecutive_dups = 0
+        for msg in reversed(messages[:-1]):
+            if hasattr(msg, 'type') and msg.type == 'tool':
+                if 'identical arguments' in str(msg.content):
+                    consecutive_dups += 1
+                else:
+                    break
+            elif hasattr(msg, 'type') and msg.type == 'ai':
+                if consecutive_dups > 0:
+                    continue
+                else:
+                    break
+            else:
+                break
+
+        if consecutive_dups >= MAX_CONSECUTIVE_DUPLICATES:
+            print(f"⚡ CIRCUIT BREAKER: {consecutive_dups} consecutive duplicate tool calls — forcing END")
+            return END
+
+        return "tool_node"
     
     # -------------------------------------------------------------------------
     # Build the Agent Graph
